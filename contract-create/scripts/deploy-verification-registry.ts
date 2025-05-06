@@ -1,12 +1,37 @@
 import hre from "hardhat";
 import VerificationRegistryModule from "../ignition/modules/VerificationRegistry";
+import { saveContractAddresses } from "./utils/saveAddresses";
 
 async function main() {
-  const {verificationRegistry} = await hre.ignition.deploy(VerificationRegistryModule);
-  console.log(`VerificationRegistry deployed to: ${(verificationRegistry as any).address}`);
+  // Get current network information
+  const network = await hre.ethers.provider.getNetwork();
+  const networkName = network.name === 'unknown' ? 'hardhat' : network.name;
+  
+  console.log(`\n=== Deploying VerificationRegistry on ${networkName} network ===\n`);
+  
+  // Deploy using Hardhat Ignition
+  const { verificationRegistry } = await hre.ignition.deploy(VerificationRegistryModule);
+  
+  // Get the deployed contract address
+  const registryAddress = (verificationRegistry as any).address;
+  console.log(`VerificationRegistry deployed to: ${registryAddress}`);
+  
+  // Save the contract address
+  const addresses = await saveContractAddresses({
+    verificationRegistry: registryAddress,
+    networkName,
+  });
+  
+  console.log('\nDeployment completed successfully!');
+  return { verificationRegistry, registryAddress: addresses.verificationRegistry };
 }
 
-main().catch(console.error);
+// Execute only if run directly
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+export default main;
 
 // import hre from "hardhat";
 // import VerificationRegistryModule from "../ignition/modules/VerificationRegistry";

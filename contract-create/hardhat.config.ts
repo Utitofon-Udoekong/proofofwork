@@ -19,16 +19,7 @@ const config: HardhatUserConfig = {
       accounts: [process.env.PRIVATE_KEY as string],
     },
   },
-  // solidity: {
-  //   version: "0.8.28",
-  //   settings: {
-  //     optimizer: {
-  //       enabled: true,
-  //       runs: 200
-  //     }
-  //   }
-  // },
-  defaultNetwork: "hardhat",
+  defaultNetwork: "sepolia",
 };
 
 export default config;

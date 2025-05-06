@@ -1,5 +1,14 @@
 {
   "name": "hardhat-project",
+  "scripts": {
+    "clean": "ts-node scripts/clean.ts",
+    "deploy": "hardhat compile && ts-node scripts/deploy-all.ts",
+    "deploy:registry": "hardhat compile && ts-node scripts/deploy-verification-registry.ts",
+    "deploy:resume": "hardhat compile && ts-node scripts/deploy-resume-nft.ts",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "addresses": "ts-node scripts/check-addresses.ts"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
@@ -9,6 +18,7 @@
     "@typechain/hardhat": "^9.1.0",
     "@types/chai": "^5.2.1",
     "chai": "^5.2.0",
+    "chalk": "^5.4.1",
     "hardhat": "^2.23.0",
     "typechain": "^8.3.2"
   },

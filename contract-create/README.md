@@ -1,109 +1,102 @@
-# ProofOfWork On-Chain Resume Builder - Smart Contracts
+# ProofOfWork Smart Contracts
 
-This directory contains the smart contracts for the On-Chain Resume Builder project.
+This directory contains the smart contracts for the ProofOfWork project, an on-chain resume platform that allows for verifiable work and education credentials.
 
 ## Contracts
 
-- **ResumeNFT**: The main contract that manages resume entries, verification requests, and soulbound NFT functionality.
-- **VerificationRegistry**: A registry contract that keeps track of verified organizations.
+1. **ResumeNFT.sol** - A soulbound NFT contract for storing resume entries with verification capabilities
+2. **VerificationRegistry.sol** - A registry for managing verified organizations that can validate resume entries
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 16+
-- pnpm or npm
-- Hardhat
-
-### Installation
+## Setup
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 ```
 
-## Development
+## Usage
+
+### Compilation
+
+```bash
+# Compile all contracts
+npm run compile
+```
 
 ### Testing
 
-Run the tests to ensure everything is working correctly:
+```bash
+# Run all tests
+npm run test
+
+# Run specific test file
+npx hardhat test test/ResumeNFT.ts
+```
+
+### Deployment
+
+The deployment scripts will automatically save the contract addresses to:
+- `deployments/contract-addresses.json`
+- `app/lib/contracts/addresses.ts` (for frontend use)
 
 ```bash
-npx hardhat test
+# Deploy all contracts
+npm run deploy
+
+# Deploy only VerificationRegistry
+npm run deploy:registry
+
+# Deploy only ResumeNFT (requires VerificationRegistry to be deployed)
+npm run deploy:resume
 ```
 
-### Deployment Scripts
-
-This project provides three deployment scripts for different scenarios:
-
-#### 1. Deploy All Contracts
-
-Deploy both VerificationRegistry and ResumeNFT in one step:
+### Checking Deployed Addresses
 
 ```bash
-npx hardhat run scripts/deploy-all.ts --network localhost
+# Check and display currently deployed contract addresses
+npm run addresses
 ```
 
-#### 2. Deploy VerificationRegistry Only
+### Cleaning
+
+To clean all deployment data, artifacts, and cached files:
 
 ```bash
-npx hardhat run scripts/deploy-verification-registry.ts --network localhost
+# Clean everything
+npm run clean
 ```
 
-#### 3. Deploy ResumeNFT
+This is useful before redeploying contracts to ensure a fresh start. The clean command removes:
 
-**A. With a new VerificationRegistry:**
-```bash
-npx hardhat run scripts/deploy-resume-nft.ts --network localhost
+- Contract artifacts and cache
+- Deployment records in `deployments/`
+- Hardhat Ignition deployment files in `ignition/deployments/`
+- Generated contract addresses in the frontend
+
+## Contract Addresses
+
+After deployment, the contract addresses will be available in:
+
+```
+deployments/contract-addresses.json
 ```
 
-**B. Using an existing VerificationRegistry address:**
-```bash
-# Set the registry address as an environment variable
-REGISTRY_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3 npx hardhat run scripts/deploy-resume-nft.ts --network localhost
+And automatically exported to the frontend in:
+
+```
+app/lib/contracts/addresses.ts
 ```
 
-### Local Deployment
+## Deployment with Environment Variables
 
-To deploy the contracts to a local Hardhat node:
-
-1. Start a local Hardhat node in a separate terminal:
-```bash
-npx hardhat node
-```
-
-2. Deploy using one of the deployment scripts as shown above.
-
-### Testnet Deployment
-
-To deploy to a testnet (e.g., Sepolia):
-
-1. Create a `.env` file with your private key and API key:
-```
-PRIVATE_KEY=your_private_key_here
-ETHERSCAN_API_KEY=your_etherscan_api_key_here
-```
-
-2. Ensure your account has enough testnet ETH (get from a faucet).
-
-3. Deploy to the testnet:
-```bash
-npx hardhat run scripts/deploy-all.ts --network sepolia
-```
-
-Or for separate deployments:
-```bash
-npx hardhat run scripts/deploy-verification-registry.ts --network sepolia
-REGISTRY_ADDRESS=your_deployed_registry_address npx hardhat run scripts/deploy-resume-nft.ts --network sepolia
-```
-
-### Verifying Contracts
-
-After deployment, the scripts will provide the exact verification commands to use:
+You can set environment variables to control deployment parameters:
 
 ```bash
-npx hardhat verify --network sepolia REGISTRY_ADDRESS
-npx hardhat verify --network sepolia RESUME_NFT_ADDRESS REGISTRY_ADDRESS OWNER_ADDRESS
+# Set verification registry address to use existing contract
+export VERIFICATION_REGISTRY_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+# Deploy only ResumeNFT with existing registry
+npm run deploy:resume
 ```
 
 ## License

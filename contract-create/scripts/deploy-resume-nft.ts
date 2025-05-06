@@ -1,13 +1,71 @@
 import hre from "hardhat";
+import * as fs from 'fs';
+import * as path from 'path';
 import ResumeNFTModule from "../ignition/modules/ResumeNFT";
+import deployVerificationRegistry from "./deploy-verification-registry";
+import { saveContractAddresses } from "./utils/saveAddresses";
 
-async function main() {
-  const { resumeNFT } = await hre.ignition.deploy(ResumeNFTModule);
-
-  console.log(`ResumeNFT deployed to: ${(resumeNFT as any).address}`);
+// Helper function to read existing contract addresses
+function readExistingAddresses(): { verificationRegistry?: string, networkName?: string } {
+  try {
+    const addressesPath = path.resolve(__dirname, '../deployments/contract-addresses.json');
+    if (fs.existsSync(addressesPath)) {
+      const data = fs.readFileSync(addressesPath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.warn('No existing addresses found or error reading file:', error);
+  }
+  return {};
 }
 
-main().catch(console.error);
+async function main() {
+  // Get current network information
+  const network = await hre.ethers.provider.getNetwork();
+  const networkName = network.name === 'unknown' ? 'hardhat' : network.name;
+  
+  console.log(`\n=== Deploying ResumeNFT on ${networkName} network ===\n`);
+
+  // Check for existing VerificationRegistry address
+  const existingAddresses = readExistingAddresses();
+  let registryAddress = existingAddresses.verificationRegistry;
+  let verificationRegistry;
+
+  // If no registry address is available or we're on a different network, deploy a new one
+  if (!registryAddress || existingAddresses.networkName !== networkName) {
+    console.log('No existing VerificationRegistry found for this network, deploying a new one...');
+    const deployment = await deployVerificationRegistry();
+    registryAddress = deployment.registryAddress;
+    verificationRegistry = deployment.verificationRegistry;
+  } else {
+    console.log(`Using existing VerificationRegistry at: ${registryAddress}`);
+  }
+
+  // Update the ResumeNFT module with the correct registry address
+  console.log('Deploying ResumeNFT...');
+  const { resumeNFT } = await hre.ignition.deploy(ResumeNFTModule);
+  
+  // Get the deployed contract address
+  const resumeAddress = (resumeNFT as any).address;
+  console.log(`ResumeNFT deployed to: ${resumeAddress}`);
+
+  // Save both contract addresses
+  const addresses = await saveContractAddresses({
+    verificationRegistry: registryAddress,
+    resumeNFT: resumeAddress,
+    networkName,
+  });
+
+  console.log('\nDeployment completed successfully!');
+  return { resumeNFT, verificationRegistry, resumeAddress, registryAddress };
+}
+
+// Execute only if run directly
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+export default main;
 
 // import hre from "hardhat";
 // import ResumeNFTModule from "../ignition/modules/ResumeNFT";

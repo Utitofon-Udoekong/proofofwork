@@ -48,4 +48,12 @@ export interface VerificationRequest {
   status: 'pending' | 'approved' | 'rejected';
   requestDate: string;
   responseDate?: string;
+}
+
+// Contract addresses for deployed contracts
+export interface ContractAddresses {
+  verificationRegistry?: string;
+  resumeNFT?: string;
+  networkName?: string;
+  deploymentTimestamp?: string;
 } 
