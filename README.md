@@ -1,6 +1,15 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProofOfWork: On-Chain Resume Builder
+
+ProofOfWork is an on-chain resume platform that allows professionals to create verifiable work and education credentials as soulbound NFTs.
+
+## Project Structure
+
+- `app/` - Next.js frontend application
+- `contract-create/` - Smart contracts and deployment scripts
 
 ## Getting Started
+
+### Frontend Development
 
 First, run the development server:
 
@@ -10,27 +19,64 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Smart Contract Management
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project includes scripts to manage smart contracts from the root directory:
+
+```bash
+# Clean all deployment artifacts and caches
+npm run contracts:clean
+
+# Deploy all contracts
+npm run contracts:deploy
+
+# Deploy individual contracts
+npm run contracts:deploy:registry  # Deploy only VerificationRegistry
+npm run contracts:deploy:resume    # Deploy only ResumeNFT
+
+# Compile contracts
+npm run contracts:compile
+
+# Run contract tests
+npm run contracts:test
+
+# Check deployed contract addresses
+npm run contracts:addresses
+```
+
+## Smart Contract Architecture
+
+ProofOfWork consists of two main smart contracts:
+
+1. **ResumeNFT.sol** - A soulbound NFT contract for storing resume entries with verification capabilities
+2. **VerificationRegistry.sol** - A registry for managing verified organizations that can validate resume entries
+
+For more details on smart contracts, see the [contract-create/README.md](./contract-create/README.md).
+
+## Frontend Features
+
+- Resume creation and management
+- Verification request workflow
+- Civic Auth integration for secure authentication
+- Mobile-responsive design
+
+## Deployment
+
+The frontend application can be deployed on Vercel:
+
+```bash
+npm run build
+npm run start
+```
+
+For smart contract deployment to testnets or mainnet, see the detailed instructions in [contract-create/README.md](./contract-create/README.md).
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Hardhat Documentation](https://hardhat.org/docs)
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)

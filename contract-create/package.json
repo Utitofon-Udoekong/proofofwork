@@ -1,7 +1,7 @@
 {
   "name": "hardhat-project",
   "scripts": {
-    "clean": "ts-node scripts/clean.ts",
+    "clean": "hardhat clean && ts-node scripts/clean.ts",
     "deploy": "hardhat compile && ts-node scripts/deploy-all.ts",
     "deploy:registry": "hardhat compile && ts-node scripts/deploy-verification-registry.ts",
     "deploy:resume": "hardhat compile && ts-node scripts/deploy-resume-nft.ts",
