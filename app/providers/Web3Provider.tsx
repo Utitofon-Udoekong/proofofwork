@@ -1,5 +1,11 @@
 'use client';
 
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
@@ -44,6 +50,13 @@ const uint8ToEntryType = (typeValue: number): EntryType => {
   return typeMap[typeValue] || 'work';
 };
 
+// Helper function to safely encode string to base64 (handles Unicode characters)
+const safeEncode = (str: string): string => {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => 
+    String.fromCharCode(parseInt(p1, 16))
+  ));
+};
+
 // Create a client
 const queryClient = new QueryClient();
 
@@ -59,6 +72,12 @@ const wagmiConfig = createConfig({
   ],
 });
 
+// Helper interface for resume metadata
+interface ResumeMetadata {
+  name: string;
+  createdAt: string;
+}
+
 // Create context for our enhanced Web3Provider
 interface Web3ContextType {
   userAuthenticated: boolean;
@@ -66,12 +85,17 @@ interface Web3ContextType {
   address: string | null;
   balance: string | null; 
   tokenId: bigint | null;
+  tokenIds: bigint[];
+  resumeNames: Record<string, ResumeMetadata>;
   // Methods
   connectWallet: () => Promise<void>;
   createWallet: () => Promise<void>;
   getResumeEntries: () => Promise<ResumeEntry[]>;
   addResumeEntry: (entryData: any) => Promise<{ success: boolean; entryIndex?: number }>;
   requestVerification: (entryIndex: number) => Promise<{ success: boolean }>;
+  createNewResume: (name?: string) => Promise<bigint>;
+  selectResume: (id: bigint) => void;
+  updateResumeName: (id: bigint, name: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -100,10 +124,37 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const { data: balanceData } = useBalance({ address });
   
   const [tokenId, setTokenId] = useState<bigint | null>(null);
+  const [tokenIds, setTokenIds] = useState<bigint[]>([]);
+  const [resumeNames, setResumeNames] = useState<Record<string, ResumeMetadata>>({});
   const [isLoading, setIsLoading] = useState(false);
   
   // Auto-connect the wallet if user has one
   useAutoConnect();
+  
+  // Load resume names from local storage
+  useEffect(() => {
+    if (address) {
+      try {
+        const storedNames = localStorage.getItem(`resume-names-${address}`);
+        if (storedNames) {
+          setResumeNames(JSON.parse(storedNames));
+        }
+      } catch (error) {
+        console.error("Error loading resume names from storage:", error);
+      }
+    }
+  }, [address]);
+  
+  // Save resume names to local storage when they change
+  useEffect(() => {
+    if (address && Object.keys(resumeNames).length > 0) {
+      try {
+        localStorage.setItem(`resume-names-${address}`, JSON.stringify(resumeNames));
+      } catch (error) {
+        console.error("Error saving resume names to storage:", error);
+      }
+    }
+  }, [resumeNames, address]);
   
   // Get contracts
   const getResumeNFTContract = useCallback(async () => {
@@ -117,36 +168,110 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     return ResumeNFT__factory.connect(resumeNFTAddress, signer);
   }, [isConnected, address]);
   
-  const getVerificationRegistryContract = useCallback(async () => {
-    if (!isConnected || !address) {
-      throw new Error("Wallet not connected");
-    }
-    
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const verificationRegistryAddress = contractAddresses.verificationRegistry || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
-    return VerificationRegistry__factory.connect(verificationRegistryAddress, signer);
-  }, [isConnected, address]);
-  
-  // Get token ID when wallet connected
+  // Get token IDs when wallet connected
   useEffect(() => {
-    const getTokenId = async () => {
+    const getTokenIds = async () => {
       if (isConnected && address) {
         try {
           const resumeNFT = await getResumeNFTContract();
-          const tokenIds = await resumeNFT.getEntriesByOwner(address);
+          const ids = await resumeNFT.getEntriesByOwner(address);
           
-          if (tokenIds && tokenIds.length > 0) {
-            setTokenId(tokenIds[0]);
+          setTokenIds(ids);
+          
+          // Set the active token ID to the first one if available
+          if (ids && ids.length > 0) {
+            setTokenId(ids[0]);
+          } else {
+            setTokenId(null);
           }
         } catch (error) {
-          console.error("Error getting user's token ID:", error);
+          console.error("Error getting user's token IDs:", error);
         }
       }
     };
     
-    getTokenId();
+    getTokenIds();
   }, [isConnected, address, getResumeNFTContract]);
+  
+  // Create a new resume NFT
+  const createNewResume = async (name?: string) => {
+    try {
+      setIsLoading(true);
+      
+      if (!isConnected || !address) {
+        throw new Error("Wallet not connected");
+      }
+      
+      const resumeName = name || `Resume #${tokenIds.length + 1}`;
+      
+      // Create a metadata object for the resume
+      const metadata = {
+        name: resumeName,
+        description: `ProofOfWork Resume - ${resumeName}`,
+        image: "https://proofofwork.crypto/logo.png", // Replace with actual logo URL
+        created_at: new Date().toISOString(),
+        owner: address,
+        attributes: []
+      };
+      
+      // In a production app, we would upload this metadata to IPFS or another decentralized storage
+      // For now, we'll create a base64-encoded data URI using our safe encoding function
+      const metadataStr = JSON.stringify(metadata);
+      const metadataUri = `data:application/json;base64,${safeEncode(metadataStr)}`;
+      
+      const resumeNFT = await getResumeNFTContract();
+      
+      // Mint a new resume NFT with the metadata URI
+      const tx = await resumeNFT.mintResume(address, metadataUri);
+      const receipt = await tx.wait();
+      
+      // Get the token ID from the event
+      const event = receipt?.logs.find(log => {
+        try {
+          const parsedLog = resumeNFT.interface.parseLog(log);
+          return parsedLog?.name === "ResumeMinted";
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsedLog = resumeNFT.interface.parseLog(event);
+        const newTokenId = parsedLog?.args.tokenId;
+        
+        // Update the token IDs and set the active token ID
+        setTokenIds(prev => [...prev, newTokenId]);
+        setTokenId(newTokenId);
+        
+        // Save the resume name
+        setResumeNames(prev => ({
+          ...prev,
+          [newTokenId.toString()]: {
+            name: resumeName,
+            createdAt: new Date().toISOString()
+          }
+        }));
+        
+        return newTokenId;
+      }
+      
+      throw new Error("Failed to get token ID from transaction");
+    } catch (error) {
+      console.error("Error creating resume:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Select a resume
+  const selectResume = (id: bigint) => {
+    if (tokenIds.includes(id)) {
+      setTokenId(id);
+    } else {
+      console.error("Invalid token ID:", id);
+    }
+  };
   
   // Connect wallet helper
   const connectWallet = async () => {
@@ -311,6 +436,90 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     }
   };
   
+  // Update resume name
+  const updateResumeName = async (id: bigint, name: string) => {
+    if (!tokenIds.includes(id)) {
+      console.error("Invalid token ID:", id);
+      return;
+    }
+    
+    try {
+      // Update in local state first for immediate UI feedback
+      setResumeNames(prev => {
+        const current = prev[id.toString()] || { createdAt: new Date().toISOString() };
+        return {
+          ...prev,
+          [id.toString()]: {
+            ...current,
+            name
+          }
+        };
+      });
+      
+      // Try to update on-chain metadata if connected
+      if (isConnected && address) {
+        setIsLoading(true);
+        
+        // Create updated metadata
+        const metadata = {
+          name: name,
+          description: `ProofOfWork Resume - ${name}`,
+          image: "https://proofofwork.crypto/logo.png",
+          updated_at: new Date().toISOString(),
+          created_at: resumeNames[id.toString()]?.createdAt || new Date().toISOString(),
+          owner: address,
+          attributes: []
+        };
+        
+        const metadataStr = JSON.stringify(metadata);
+        const metadataUri = `data:application/json;base64,${safeEncode(metadataStr)}`;
+        
+        // Get contract instance
+        const resumeNFT = await getResumeNFTContract();
+        
+        // The contract doesn't have a direct setTokenURI method accessible,
+        // but we can use updateEntry for the first entry if it exists
+        try {
+          // Get current entries
+          const entries = await resumeNFT.getResumeEntries(id);
+          
+          if (entries.length > 0) {
+            // For simplicity, we'll just update the first entry to trigger a tokenURI update
+            // Using a placeholder entry if needed
+            const entry = entries[0];
+            
+            // Call updateEntry with the same values but new tokenURI
+            const tx = await resumeNFT.updateEntry(
+              id,                         // tokenId
+              0,                          // entryIndex (first entry)
+              entry.entryType,            // keep same type
+              entry.title,                // keep same title
+              entry.description,          // keep same description
+              entry.startDate,            // keep same startDate
+              entry.endDate,              // keep same endDate
+              entry.organization,         // keep same organization
+              entry.metadata,             // keep same metadata
+              metadataUri                 // new token URI
+            );
+            
+            await tx.wait();
+            console.log("Resume metadata updated on-chain");
+          } else {
+            console.log("No entries to update - metadata update skipped");
+          }
+        } catch (error) {
+          console.error("Error updating resume entry:", error);
+          // The local state update was still done, so the name will be updated in the UI
+        }
+      }
+    } catch (error) {
+      console.error("Error updating resume name:", error);
+      // Local state update was already done, so user still sees the name change
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   // Create context value
   const contextValue: Web3ContextType = {
     userAuthenticated: !!userContext.user,
@@ -318,11 +527,16 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     address: address || null,
     balance: balanceData ? `${(Number(balanceData.value) / 10**18).toFixed(4)} ${balanceData.symbol}` : null,
     tokenId,
+    tokenIds,
+    resumeNames,
     connectWallet,
     createWallet,
     getResumeEntries,
     addResumeEntry,
     requestVerification,
+    createNewResume,
+    selectResume,
+    updateResumeName,
     isLoading
   };
   

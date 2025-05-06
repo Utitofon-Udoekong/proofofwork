@@ -3,71 +3,51 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ResumeEntry, EntryType } from "@/app/lib/types";
-import { Web3Service } from "@/app/lib/web3Service";
+import { useWeb3 } from "@/app/providers/Web3Provider";
+import ResumeManager from "@/app/components/resume/ResumeManager";
+import ResumePreview from "@/app/components/resume/ResumePreview";
 
 export default function DashboardPage() {
   const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [web3Service, setWeb3Service] = useState<Web3Service | null>(null);
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [filteredType, setFilteredType] = useState<EntryType | 'all'>('all');
+  const { 
+    walletConnected, 
+    connectWallet, 
+    getResumeEntries, 
+    requestVerification,
+    isLoading,
+    tokenId
+  } = useWeb3();
 
   useEffect(() => {
-    const initializeWeb3 = async () => {
-      const service = new Web3Service();
-      const { isConnected } = await service.initialize();
-      
-      setWeb3Service(service);
-      setIsWalletConnected(isConnected);
-      
-      if (isConnected) {
-        await fetchResumeEntries(service);
+    const fetchEntries = async () => {
+      if (walletConnected) {
+        try {
+          setLoading(true);
+          const entries = await getResumeEntries();
+          setResumeEntries(entries);
+        } catch (error) {
+          console.error("Error fetching resume entries:", error);
+        } finally {
+          setLoading(false);
+        }
       } else {
         setLoading(false);
       }
     };
     
-    initializeWeb3();
-  }, []);
-
-  const fetchResumeEntries = async (service: Web3Service) => {
-    try {
-      setLoading(true);
-      const entries = await service.getResumeEntries();
-      setResumeEntries(entries);
-    } catch (error) {
-      console.error("Error fetching resume entries:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConnectWallet = async () => {
-    if (web3Service) {
-      try {
-        const { isConnected } = await web3Service.connectWallet();
-        setIsWalletConnected(isConnected);
-        
-        if (isConnected) {
-          await fetchResumeEntries(web3Service);
-        }
-      } catch (error) {
-        console.error("Failed to connect wallet:", error);
-        alert("Failed to connect wallet. Please make sure you have MetaMask installed.");
-        setLoading(false);
-      }
-    }
-  };
+    fetchEntries();
+  }, [walletConnected, getResumeEntries]);
 
   const handleRequestVerification = async (entryId: number | string) => {
-    if (!web3Service) return;
-    
     try {
-      await web3Service.requestVerification(Number(entryId));
+      await requestVerification(Number(entryId));
       alert("Verification requested successfully!");
       
       // Refresh entries
-      await fetchResumeEntries(web3Service);
+      const entries = await getResumeEntries();
+      setResumeEntries(entries);
     } catch (error) {
       console.error("Error requesting verification:", error);
       alert("Failed to request verification. Please try again.");
@@ -199,7 +179,7 @@ export default function DashboardPage() {
     ? resumeEntries 
     : resumeEntries.filter(entry => entry.type === filteredType);
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
@@ -212,7 +192,7 @@ export default function DashboardPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Your Resume</h1>
-        {isWalletConnected && (
+        {walletConnected && tokenId && (
           <Link 
             href="/dashboard/create-entry" 
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
@@ -222,129 +202,125 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {!isWalletConnected ? (
+      {!walletConnected ? (
         <div className="text-center py-16 bg-white rounded-lg shadow-sm border">
           <h2 className="text-xl font-medium mb-4">Connect Your Wallet</h2>
           <p className="text-gray-600 mb-6">Connect your wallet to view and manage your on-chain resume.</p>
           <button 
-            onClick={handleConnectWallet}
+            onClick={connectWallet}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium"
           >
             Connect Wallet
           </button>
         </div>
-      ) : resumeEntries.length === 0 ? (
-        <div className="text-center py-16 bg-gray-50 rounded-lg">
-          <h2 className="text-xl font-medium mb-4">No resume entries yet</h2>
-          <p className="text-gray-600 mb-6">Start building your on-chain resume by adding your first entry.</p>
-          <Link 
-            href="/dashboard/create-entry" 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium"
-          >
-            Create Your First Entry
-          </Link>
-        </div>
       ) : (
-        <div>
-          {/* Entry type filter */}
-          <div className="mb-6">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFilteredType('all')}
-                className={`px-3 py-1 text-sm rounded-full ${
-                  filteredType === 'all' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                All
-              </button>
-              {(['work', 'education', 'certification', 'project', 'skill', 'award'] as EntryType[]).map(type => (
-                <button
-                  key={type}
-                  onClick={() => setFilteredType(type)}
-                  className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
-                    filteredType === type 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {getEntryTypeIcon(type)}
-                  {getEntryTypeName(type)}
-                </button>
-              ))}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="md:col-span-2">
+              {/* Resume Manager Component */}
+              <ResumeManager />
+            </div>
+            <div>
+              {/* Resume Preview Component */}
+              <ResumePreview />
             </div>
           </div>
-          
-          {/* Entry list */}
-          <div className="grid gap-4">
-            {filteredEntries.map((entry) => (
-              <div key={entry.id} className="border rounded-lg p-4 shadow-sm bg-white">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      {getEntryTypeIcon(entry.type)}
-                      <span className="text-xs font-medium text-gray-500 uppercase">{getEntryTypeName(entry.type)}</span>
-                    </div>
-                    <h3 className="text-xl font-bold">{entry.title}</h3>
-                    <p className="text-gray-600">{entry.company}</p>
-                    <p className="text-sm text-gray-500">
-                      {entry.startDate} - {entry.endDate}
-                    </p>
-                    
-                    {/* Additional info specific to entry type */}
-                    <div className="mt-2">
-                      {getEntryAdditionalInfo(entry)}
-                    </div>
-                    
-                    {entry.description && (
-                      <p className="mt-2 text-gray-700">{entry.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center">
-                    {entry.verified ? (
-                      <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                        </svg>
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 102 0V7zm-1 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"></path>
-                        </svg>
-                        Pending Verification
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Link 
-                    href={`/dashboard/edit-entry/${entry.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+
+          {!tokenId ? (
+            <div className="text-center py-16 bg-gray-50 rounded-lg">
+              <h2 className="text-xl font-medium mb-4">No resume selected</h2>
+              <p className="text-gray-600 mb-6">
+                Create a new resume or select an existing one to get started.
+              </p>
+            </div>
+          ) : resumeEntries.length === 0 ? (
+            <div className="text-center py-16 bg-gray-50 rounded-lg">
+              <h2 className="text-xl font-medium mb-4">No resume entries yet</h2>
+              <p className="text-gray-600 mb-6">Start building your on-chain resume by adding your first entry.</p>
+              <Link 
+                href="/dashboard/create-entry" 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium"
+              >
+                Create Your First Entry
+              </Link>
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Your Entries</h2>
+                <div className="flex items-center space-x-2">
+                  <label htmlFor="filterType" className="text-sm">Filter:</label>
+                  <select
+                    id="filterType"
+                    value={filteredType}
+                    onChange={(e) => setFilteredType(e.target.value as EntryType | 'all')}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm"
                   >
-                    Edit
-                  </Link>
-                  {!entry.verified && (
-                    <button 
-                      onClick={() => handleRequestVerification(entry.id)}
-                      className="text-green-600 hover:text-green-800 text-sm font-medium"
-                    >
-                      Request Verification
-                    </button>
-                  )}
-                  <button 
-                    className="text-red-600 hover:text-red-800 text-sm font-medium"
-                    onClick={() => handleDeleteEntry(entry.id)}
-                  >
-                    Delete
-                  </button>
+                    <option value="all">All Entries</option>
+                    <option value="work">Work</option>
+                    <option value="education">Education</option>
+                    <option value="certification">Certification</option>
+                    <option value="project">Project</option>
+                    <option value="skill">Skill</option>
+                    <option value="award">Award</option>
+                  </select>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse bg-white p-6 rounded-lg shadow-sm">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="flex space-x-2">
+                        <div className="h-8 bg-gray-200 rounded w-20"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredEntries.map((entry, index) => (
+                    <div key={index} className="bg-white p-6 rounded-lg shadow-sm border relative">
+                      {entry.verified && (
+                        <div className="absolute top-2 right-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                          Verified ✓
+                        </div>
+                      )}
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold">{entry.title}</h3>
+                        <p className="text-gray-600">{entry.company}</p>
+                        <p className="text-sm text-gray-500">{entry.startDate} - {entry.endDate}</p>
+                      </div>
+                      <p className="text-sm mb-4">{entry.description}</p>
+                      
+                      <div className="flex items-center space-x-2 text-sm">
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
+                        </span>
+                        {!entry.verified && !entry.verificationRequested && (
+                          <button
+                            onClick={() => handleRequestVerification(index)}
+                            className="bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                          >
+                            Request Verification
+                          </button>
+                        )}
+                        {!entry.verified && entry.verificationRequested && (
+                          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                            Verification Requested
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -3,14 +3,23 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Web3Service } from "@/app/lib/web3Service";
+import { useWeb3 } from "@/app/providers/Web3Provider";
 import { EntryType } from "@/app/lib/types";
 
 export default function CreateEntryPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [web3Service, setWeb3Service] = useState<Web3Service | null>(null);
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const { 
+    walletConnected, 
+    tokenId, 
+    tokenIds,
+    resumeNames,
+    connectWallet, 
+    addResumeEntry,
+    createNewResume,
+    selectResume,
+    isLoading 
+  } = useWeb3();
   const [entryType, setEntryType] = useState<EntryType>('work');
   const [formData, setFormData] = useState({
     title: "",
@@ -36,30 +45,6 @@ export default function CreateEntryPage() {
     proficiencyLevel: ""
   });
 
-  useEffect(() => {
-    const initializeWeb3 = async () => {
-      const service = new Web3Service();
-      const { isConnected } = await service.initialize();
-      
-      setWeb3Service(service);
-      setIsWalletConnected(isConnected);
-    };
-    
-    initializeWeb3();
-  }, []);
-
-  const handleConnectWallet = async () => {
-    if (web3Service) {
-      try {
-        const { isConnected } = await web3Service.connectWallet();
-        setIsWalletConnected(isConnected);
-      } catch (error) {
-        console.error("Failed to connect wallet:", error);
-        alert("Failed to connect wallet. Please make sure you have MetaMask installed.");
-      }
-    }
-  };
-
   const handleChangeType = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setEntryType(e.target.value as EntryType);
   };
@@ -84,23 +69,10 @@ export default function CreateEntryPage() {
         return;
       }
 
-      if (!web3Service || !isWalletConnected) {
+      if (!walletConnected) {
         alert("Please connect your wallet first");
         setIsSubmitting(false);
         return;
-      }
-
-      // Create a resume if the user doesn't have one
-      if (!web3Service.tokenId) {
-        try {
-          await web3Service.createResume("");
-          console.log("Resume created with token ID:", web3Service.tokenId);
-        } catch (error) {
-          console.error("Error creating resume:", error);
-          alert("Failed to create resume. Please try again.");
-          setIsSubmitting(false);
-          return;
-        }
       }
 
       // Add the resume entry
@@ -142,7 +114,7 @@ export default function CreateEntryPage() {
         });
       }
 
-      const result = await web3Service.addResumeEntry(entryDataToSubmit);
+      const result = await addResumeEntry(entryDataToSubmit);
 
       console.log("Entry added:", result);
       
@@ -152,8 +124,24 @@ export default function CreateEntryPage() {
     } catch (error) {
       console.error("Error submitting entry:", error);
       alert("Failed to create entry. Please try again.");
+    } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCreateResume = async () => {
+    try {
+      await createNewResume("My Professional Resume");
+    } catch (error) {
+      console.error("Error creating new resume:", error);
+      alert("Failed to create a new resume. Please try again.");
+    }
+  };
+
+  // Helper to get resume name
+  const getResumeName = (id: bigint): string => {
+    const idStr = id.toString();
+    return resumeNames[idStr]?.name || `Resume #${idStr}`;
   };
 
   // Function to render different form fields based on entry type
@@ -351,181 +339,237 @@ export default function CreateEntryPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Add New Resume Entry</h1>
-        <p className="text-gray-600 mt-2">Create a new entry for your on-chain resume</p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8 flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Add Resume Entry</h1>
+        <Link href="/dashboard" className="text-blue-600 hover:text-blue-800">
+          Back to Dashboard
+        </Link>
       </div>
-
-      {!isWalletConnected ? (
-        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
-          <p className="mb-4">Connect your wallet to add resume entries</p>
+      
+      {!walletConnected ? (
+        <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
+          <p className="text-gray-600 mb-6">
+            Please connect your wallet to add entries to your resume.
+          </p>
           <button
-            onClick={handleConnectWallet}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            onClick={connectWallet}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md"
           >
             Connect Wallet
           </button>
         </div>
+      ) : !tokenId ? (
+        <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+          <h2 className="text-2xl font-bold mb-4">No Resume Selected</h2>
+          <p className="text-gray-600 mb-6">
+            You need to create a resume before you can add entries.
+          </p>
+          <button
+            onClick={handleCreateResume}
+            disabled={isLoading}
+            className={`bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md ${
+              isLoading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            {isLoading ? "Creating..." : "Create New Resume"}
+          </button>
+        </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border">
-          <div>
-            <label htmlFor="entryType" className="block text-sm font-medium text-gray-700 mb-1">
-              Entry Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="entryType"
-              name="entryType"
-              value={entryType}
-              onChange={handleChangeType}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="work">Work Experience</option>
-              <option value="education">Education</option>
-              <option value="certification">Certification</option>
-              <option value="project">Project</option>
-              <option value="skill">Skill</option>
-              <option value="award">Award</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder={`e.g. ${entryType === 'work' ? 'Software Engineer' : 
-                             entryType === 'education' ? 'Computer Science Degree' : 
-                             entryType === 'certification' ? 'AWS Certified Developer' : 
-                             entryType === 'project' ? 'E-commerce Website' : 
-                             entryType === 'skill' ? 'JavaScript' : 'Excellence in Technology Award'}`}
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-              {getCompanyLabel()} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="company"
-              name="company"
-              value={formData.company}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder={`e.g. ${entryType === 'work' ? 'Tech Solutions Inc.' : 
-                             entryType === 'education' ? 'Stanford University' : 
-                             entryType === 'certification' ? 'AWS' : 
-                             entryType === 'project' ? 'Personal Project' : 
-                             entryType === 'skill' ? 'Self-Taught' : 'Industry Association'}`}
-              required
-            />
-          </div>
-
-          {/* Render type-specific fields */}
-          {renderTypeSpecificFields()}
-
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder={`Describe your ${entryType}`}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <>
+          {/* Resume selector if multiple resumes exist */}
+          {tokenIds.length > 1 && (
+            <div className="mb-6 bg-white p-4 rounded-lg shadow-sm">
+              <h2 className="text-lg font-semibold mb-2">Select Resume</h2>
+              <p className="text-sm text-gray-600 mb-3">
+                Choose which resume to add this entry to:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {tokenIds.map((id) => (
+                  <button
+                    key={String(id)}
+                    onClick={() => selectResume(id)}
+                    className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                      tokenId === id
+                        ? "bg-blue-50 border-blue-300 text-blue-700"
+                        : "border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {getResumeName(id)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        
+          <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border">
+            {/* Form heading showing which resume this entry is for */}
+            <div className="pb-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold">Adding to: {getResumeName(tokenId)}</h2>
+              <p className="text-sm text-gray-600">
+                Resume ID: {tokenId.toString()}
+              </p>
+            </div>
+            
             <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Start Date <span className="text-red-500">*</span>
+              <label htmlFor="entryType" className="block text-sm font-medium text-gray-700 mb-1">
+                Entry Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="entryType"
+                name="entryType"
+                value={entryType}
+                onChange={handleChangeType}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="work">Work Experience</option>
+                <option value="education">Education</option>
+                <option value="certification">Certification</option>
+                <option value="project">Project</option>
+                <option value="skill">Skill</option>
+                <option value="award">Award</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                Title <span className="text-red-500">*</span>
               </label>
               <input
-                type="date"
-                id="startDate"
-                name="startDate"
-                value={formData.startDate}
+                type="text"
+                id="title"
+                name="title"
+                value={formData.title}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder={`e.g. ${entryType === 'work' ? 'Software Engineer' : 
+                               entryType === 'education' ? 'Computer Science Degree' : 
+                               entryType === 'certification' ? 'AWS Certified Developer' : 
+                               entryType === 'project' ? 'E-commerce Website' : 
+                               entryType === 'skill' ? 'JavaScript' : 'Excellence in Technology Award'}`}
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-                End Date
+              <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
+                {getCompanyLabel()} <span className="text-red-500">*</span>
               </label>
               <input
-                type="date"
-                id="endDate"
-                name="endDate"
-                value={formData.endDate}
+                type="text"
+                id="company"
+                name="company"
+                value={formData.company}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder={`e.g. ${entryType === 'work' ? 'Tech Solutions Inc.' : 
+                               entryType === 'education' ? 'Stanford University' : 
+                               entryType === 'certification' ? 'AWS' : 
+                               entryType === 'project' ? 'Personal Project' : 
+                               entryType === 'skill' ? 'Self-Taught' : 'Industry Association'}`}
+                required
               />
-              <div className="mt-1 text-xs text-gray-500">Leave blank if {entryType === 'work' ? 'current position' : entryType === 'education' ? 'currently enrolled' : 'ongoing'}</div>
             </div>
-          </div>
 
-          <div>
-            <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-1">
-              Verifying Organization (optional)
-            </label>
-            <input
-              type="text"
-              id="organization"
-              name="organization"
-              value={formData.organization}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter the name of organization that can verify this entry"
-            />
-            <div className="mt-1 text-xs text-gray-500">
-              This should be an organization registered on our platform that can verify your experience
+            {/* Render type-specific fields */}
+            {renderTypeSpecificFields()}
+
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder={`Describe your ${entryType}`}
+              />
             </div>
-          </div>
 
-          <div className="flex items-center justify-between pt-4">
-            <Link
-              href="/dashboard"
-              className="text-gray-600 hover:text-gray-800 font-medium"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`px-4 py-2 rounded-lg text-white font-medium ${
-                isSubmitting ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              {isSubmitting ? (
-                <div className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </div>
-              ) : (
-                "Save Entry"
-              )}
-            </button>
-          </div>
-        </form>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  id="startDate"
+                  name="startDate"
+                  value={formData.startDate}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  id="endDate"
+                  name="endDate"
+                  value={formData.endDate}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+                <div className="mt-1 text-xs text-gray-500">Leave blank if {entryType === 'work' ? 'current position' : entryType === 'education' ? 'currently enrolled' : 'ongoing'}</div>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-1">
+                Verifying Organization (optional)
+              </label>
+              <input
+                type="text"
+                id="organization"
+                name="organization"
+                value={formData.organization}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter the name of organization that can verify this entry"
+              />
+              <div className="mt-1 text-xs text-gray-500">
+                This should be an organization registered on our platform that can verify your experience
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4">
+              <Link
+                href="/dashboard"
+                className="text-gray-600 hover:text-gray-800 font-medium"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`px-4 py-2 rounded-lg text-white font-medium ${
+                  isSubmitting ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </div>
+                ) : (
+                  "Save Entry"
+                )}
+              </button>
+            </div>
+          </form>
+        </>
       )}
     </div>
   );

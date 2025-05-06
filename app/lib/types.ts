@@ -1,8 +1,3 @@
-export interface User {
-  address: string;
-  isAuthenticated: boolean;
-}
-
 export type EntryType = 'work' | 'education' | 'certification' | 'project' | 'skill' | 'award';
 
 export interface ResumeEntry {
