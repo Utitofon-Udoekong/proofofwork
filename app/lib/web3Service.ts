@@ -9,24 +9,17 @@ declare global {
 import { ethers } from 'ethers';
 import { ResumeEntry, EntryType } from './types';
 import { contractAddresses } from './contracts/addresses';
-
-// ABI snippets for the smart contracts
-const RESUME_NFT_ABI = [
-  "function mintResume(address recipient, string memory metadataURI) public returns (uint256)",
-  "function addResumeEntry(uint256 tokenId, uint8 entryTypeValue, string memory title, string memory description, uint256 startDate, uint256 endDate, string memory organization, string memory metadata) public",
-  "function requestVerification(uint256 tokenId, uint256 entryIndex) public",
-  "function getResumeEntries(uint256 tokenId) public view returns (tuple(uint8 entryType, string title, string description, uint256 startDate, uint256 endDate, string organization, bool verified, string metadata)[] memory)",
-  "function getEntriesByOwner(address owner) public view returns (uint256[] memory)"
-];
-
-const VERIFICATION_REGISTRY_ABI = [
-  "function isVerifiedOrganization(address _organization) public view returns (bool)",
-  "function verifyOrganization(address _organization) public",
-  "function revokeOrganization(address _organization) public"
-];
+// Import the typed contract interfaces and factories
+import { 
+  ResumeNFT, 
+  VerificationRegistry,
+  ResumeNFT__factory,
+  VerificationRegistry__factory,
+  ContractStructs
+} from './contracts/contract-types';
 
 // Load contract addresses from the generated addresses file
-const RESUME_NFT_ADDRESS = contractAddresses.resumeNFT || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+const RESUME_NFT_ADDRESS = contractAddresses.resumeNFT || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 const VERIFICATION_REGISTRY_ADDRESS = contractAddresses.verificationRegistry || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
 // Helper function to convert EntryType string to uint8 for contract
@@ -58,8 +51,9 @@ const uint8ToEntryType = (typeValue: number): EntryType => {
 export class Web3Service {
   provider: ethers.BrowserProvider | null = null;
   signer: ethers.Signer | null = null;
-  resumeNFTContract: ethers.Contract | null = null;
-  verificationRegistryContract: ethers.Contract | null = null;
+  // Use the typed contract interfaces
+  resumeNFTContract: ResumeNFT | null = null;
+  verificationRegistryContract: VerificationRegistry | null = null;
   userAddress: string | null = null;
   tokenId: number | null = null;
 
@@ -71,16 +65,14 @@ export class Web3Service {
         this.signer = await this.provider.getSigner();
         this.userAddress = await this.signer.getAddress();
         
-        // Initialize contracts
-        this.resumeNFTContract = new ethers.Contract(
+        // Initialize contracts using the factory patterns from typechain
+        this.resumeNFTContract = ResumeNFT__factory.connect(
           RESUME_NFT_ADDRESS,
-          RESUME_NFT_ABI,
           this.signer
         );
         
-        this.verificationRegistryContract = new ethers.Contract(
+        this.verificationRegistryContract = VerificationRegistry__factory.connect(
           VERIFICATION_REGISTRY_ADDRESS,
-          VERIFICATION_REGISTRY_ABI,
           this.signer
         );
         
@@ -88,7 +80,7 @@ export class Web3Service {
         try {
           const tokenIds = await this.resumeNFTContract.getEntriesByOwner(this.userAddress);
           if (tokenIds && tokenIds.length > 0) {
-            this.tokenId = tokenIds[0];
+            this.tokenId = Number(tokenIds[0]);
           }
         } catch (error) {
           console.error("Error getting user's token ID:", error);
@@ -129,12 +121,18 @@ export class Web3Service {
       const receipt = await tx.wait();
       
       // Get the token ID from the event
-      const event = receipt.logs.find(
-        (log: any) => log.eventName === "ResumeMinted"
-      );
+      const event = receipt?.logs.find(log => {
+        try {
+          const parsedLog = this.resumeNFTContract?.interface.parseLog(log);
+          return parsedLog?.name === "ResumeMinted";
+        } catch (e) {
+          return false;
+        }
+      });
       
       if (event) {
-        this.tokenId = event.args.tokenId;
+        const parsedLog = this.resumeNFTContract!.interface.parseLog(event);
+        this.tokenId = Number(parsedLog?.args.tokenId);
         return this.tokenId;
       }
       
@@ -157,7 +155,7 @@ export class Web3Service {
     [key: string]: any;
   }) {
     try {
-      if (!this.resumeNFTContract || !this.tokenId) {
+      if (!this.resumeNFTContract || this.tokenId === null) {
         throw new Error("Resume not initialized");
       }
       
@@ -176,13 +174,14 @@ export class Web3Service {
       // Create a metadata object to store additional fields based on entry type
       const metadata = JSON.stringify(additionalFields);
       
+      // Use the typed contract method
       const tx = await this.resumeNFTContract.addResumeEntry(
-        this.tokenId,
-        entryTypeValue,
+        BigInt(this.tokenId),
+        BigInt(entryTypeValue),
         entryData.title,
         entryData.description,
-        startTimestamp,
-        endTimestamp,
+        BigInt(startTimestamp),
+        BigInt(endTimestamp),
         entryData.organization || entryData.company,
         metadata
       );
@@ -190,14 +189,20 @@ export class Web3Service {
       const receipt = await tx.wait();
       
       // Get the entry index from the event
-      const event = receipt.logs.find(
-        (log: any) => log.eventName === "ResumeEntryAdded"
-      );
+      const event = receipt?.logs.find(log => {
+        try {
+          const parsedLog = this.resumeNFTContract?.interface.parseLog(log);
+          return parsedLog?.name === "ResumeEntryAdded";
+        } catch (e) {
+          return false;
+        }
+      });
       
       if (event) {
+        const parsedLog = this.resumeNFTContract!.interface.parseLog(event);
         return { 
           success: true, 
-          entryIndex: event.args.entryIndex 
+          entryIndex: Number(parsedLog?.args.entryIndex)
         };
       }
       
@@ -210,16 +215,17 @@ export class Web3Service {
 
   async getResumeEntries(): Promise<ResumeEntry[]> {
     try {
-      if (!this.resumeNFTContract || !this.tokenId) {
+      if (!this.resumeNFTContract || this.tokenId === null) {
         return [];
       }
       
-      const entries = await this.resumeNFTContract.getResumeEntries(this.tokenId);
+      // Use the typed contract method
+      const entries = await this.resumeNFTContract.getResumeEntries(BigInt(this.tokenId));
       
       // Transform the contract data to our ResumeEntry format
-      return entries.map((entry: any, index: number) => {
+      return entries.map((entry: ContractStructs.ResumeEntryStructOutput, index: number) => {
         // Convert the numeric entryType to string EntryType
-        const type = uint8ToEntryType(entry.entryType);
+        const type = uint8ToEntryType(Number(entry.entryType));
         
         // Parse the metadata JSON to extract additional fields
         let additionalFields = {};
@@ -237,9 +243,9 @@ export class Web3Service {
           title: entry.title,
           company: entry.organization,
           description: entry.description,
-          startDate: new Date(entry.startDate * 1000).toISOString().split('T')[0],
-          endDate: entry.endDate > 0 
-            ? new Date(entry.endDate * 1000).toISOString().split('T')[0]
+          startDate: new Date(Number(entry.startDate) * 1000).toISOString().split('T')[0],
+          endDate: Number(entry.endDate) > 0 
+            ? new Date(Number(entry.endDate) * 1000).toISOString().split('T')[0]
             : 'Present',
           verified: entry.verified,
           organization: entry.organization,
@@ -254,11 +260,15 @@ export class Web3Service {
 
   async requestVerification(entryIndex: number) {
     try {
-      if (!this.resumeNFTContract || !this.tokenId) {
+      if (!this.resumeNFTContract || this.tokenId === null) {
         throw new Error("Resume not initialized");
       }
       
-      const tx = await this.resumeNFTContract.requestVerification(this.tokenId, entryIndex);
+      // Use the typed contract method
+      const tx = await this.resumeNFTContract.requestVerification(
+        BigInt(this.tokenId), 
+        BigInt(entryIndex)
+      );
       await tx.wait();
       
       return { success: true };
@@ -267,4 +277,6 @@ export class Web3Service {
       throw error;
     }
   }
+
+  // Additional methods would be similarly updated with proper typing
 } 
