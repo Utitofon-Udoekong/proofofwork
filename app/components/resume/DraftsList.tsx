@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSortedDrafts, useResumeDraftStore } from '@/app/lib/stores/resumeDraftStore';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -13,10 +13,26 @@ export default function DraftsList({ onSelectDraft, className = '' }: DraftsList
   const drafts = useSortedDrafts();
   const { createDraft, deleteDraft } = useResumeDraftStore();
   const [isConfirmingDelete, setIsConfirmingDelete] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // For debugging - check localStorage directly
+  useEffect(() => {
+    try {
+      const localStorageDrafts = localStorage.getItem('pow-resume-drafts');
+      if (localStorageDrafts) {
+        const parsed = JSON.parse(localStorageDrafts);
+        setDebugInfo(`Found ${Object.keys(parsed.state.drafts || {}).length} drafts in localStorage`);
+      } else {
+        setDebugInfo('No drafts found in localStorage');
+      }
+    } catch (err) {
+      setDebugInfo(`Error reading localStorage: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, []);
 
   // Handler for creating a new draft
   const handleCreateDraft = () => {
-    const newDraftId = createDraft();
+    const newDraftId = createDraft(undefined, `Draft Resume ${new Date().toLocaleString()}`);
     onSelectDraft(newDraftId);
   };
 
@@ -32,43 +48,49 @@ export default function DraftsList({ onSelectDraft, className = '' }: DraftsList
     }
   };
 
+  // For debugging - force create a test draft
+  const handleForceCreateTestDraft = () => {
+    createDraft(undefined, `Test Draft ${new Date().toLocaleString()}`);
+  };
+
+  // Don't render anything if there are no drafts
   if (drafts.length === 0) {
-    return (
-      <div className={`p-4 rounded-lg bg-gray-50 ${className}`}>
-        <p className="text-gray-500 mb-4">You don't have any resume drafts yet.</p>
-        <button
-          onClick={handleCreateDraft}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        >
-          Create New Draft
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Your Resume Drafts</h3>
-        <button
-          onClick={handleCreateDraft}
-          className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        >
-          New Draft
-        </button>
+        <h3 className="text-lg font-medium text-white">Your Resume Drafts</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCreateDraft}
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+          >
+            New Draft
+          </button>
+          <button
+            onClick={handleForceCreateTestDraft}
+            className="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+          >
+            Create Test
+          </button>
+        </div>
       </div>
       
-      <ul className="divide-y divide-gray-200 bg-white rounded-lg shadow overflow-hidden">
+      <p className="text-xs text-gray-400">Debug: {debugInfo}</p>
+      
+      <ul className="divide-y divide-gray-700 bg-gray-700 rounded-lg overflow-hidden">
         {drafts.map((draft) => (
-          <li key={draft.id} className="hover:bg-gray-50">
+          <li key={draft.id} className="hover:bg-gray-600">
             <div className="p-4 flex justify-between items-center">
               <button
                 onClick={() => onSelectDraft(draft.id)}
                 className="flex-1 flex items-start text-left"
               >
                 <div>
-                  <h4 className="font-medium text-gray-900">{draft.name}</h4>
-                  <div className="flex mt-1 text-sm text-gray-500">
+                  <h4 className="font-medium text-white">{draft.name}</h4>
+                  <div className="flex mt-1 text-sm text-gray-300">
                     <span>
                       Last updated {formatDistanceToNow(new Date(draft.lastUpdated))} ago
                     </span>
@@ -82,8 +104,8 @@ export default function DraftsList({ onSelectDraft, className = '' }: DraftsList
                 onClick={() => handleDeleteDraft(draft.id)}
                 className={`ml-4 p-1.5 rounded-md ${
                   isConfirmingDelete === draft.id
-                    ? 'bg-red-100 text-red-600'
-                    : 'text-gray-400 hover:text-gray-500'
+                    ? 'bg-red-900/50 text-red-300'
+                    : 'text-gray-300 hover:text-gray-100'
                 }`}
               >
                 {isConfirmingDelete === draft.id ? (

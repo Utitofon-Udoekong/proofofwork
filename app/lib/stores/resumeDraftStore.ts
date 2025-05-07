@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { EntryType } from '../types';
+import { EntryType, ProfileMetadata } from '../types';
 
 export type ResumeDraftEntryType = {
   id?: string; // Auto-generated when saving
@@ -21,6 +21,7 @@ export type ResumeDraft = {
   activeEntryIndex: number | null;
   name?: string;
   attachments?: { ipfsUri: string; httpUrl: string; name: string; type: string }[];
+  profileData?: Partial<ProfileMetadata>; // Profile information
 };
 
 export type ResumeDraftsState = {

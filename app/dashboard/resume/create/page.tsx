@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useResumeDraftStore, ResumeDraftEntryType } from '@/app/lib/stores/resumeDraftStore';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { EntryType, EntryTypeEnum, ProfileMetadata } from '@/app/lib/types';
 import FileUploader from '@/app/components/ui/FileUploader';
@@ -56,6 +56,8 @@ const entryTypeOptions = [
 
 export default function CreateResumePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlDraftId = searchParams.get('draftId');
   const { address, createNewResume, addResumeEntry } = useWeb3();
   
   // Access store with a stable reference
@@ -78,6 +80,7 @@ export default function CreateResumePage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [isDraftMode, setIsDraftMode] = useState<boolean>(false);
   
   // New profile state
   const [profileData, setProfileData] = useState<Partial<ProfileMetadata>>({
@@ -174,14 +177,74 @@ export default function CreateResumePage() {
     return drafts[draftId] || null;
   }, [draftId]);
   
-  // Create a draft on initial load
+  // Load draft from URL parameter if provided
   useEffect(() => {
-    if (!draftId) {
-      const newDraftId = createDraft(undefined, resumeName);
-      setDraftId(newDraftId);
+    if (urlDraftId) {
+      // Check if this draft exists
+      const drafts = useResumeDraftStore.getState().drafts;
+      const draft = drafts[urlDraftId];
+      
+      if (draft) {
+        console.log("Loading draft:", JSON.stringify(draft, null, 2)); // Debug log
+        setDraftId(urlDraftId);
+        setIsDraftMode(true);
+        
+        // Load draft data
+        if (draft.name) {
+          setResumeName(draft.name);
+          console.log("Set resume name to:", draft.name);
+        }
+        
+        // Update profile data if available
+        if (draft.profileData) {
+          console.log("Setting profile data from draft:", JSON.stringify(draft.profileData, null, 2));
+          
+          // Create a new object with all the profile fields
+          const profileUpdate = {
+            name: draft.profileData.name || resumeName,
+            headline: draft.profileData.headline || '',
+            bio: draft.profileData.bio || '',
+            location: draft.profileData.location || '',
+            contactEmail: draft.profileData.contactEmail || '',
+            socialLinks: draft.profileData.socialLinks ? { ...draft.profileData.socialLinks } : {
+              linkedin: '',
+              github: '',
+              twitter: '',
+              website: ''
+            },
+            skills: draft.profileData.skills ? [...draft.profileData.skills] : [],
+            languages: draft.profileData.languages ? [...draft.profileData.languages] : []
+          };
+          
+          console.log("Setting profile data to:", profileUpdate);
+          setProfileData(profileUpdate);
+        }
+        
+        // If the draft has entries, load them for editing
+        if (draft.entries && draft.entries.length > 0) {
+          console.log("Setting entries from draft:", draft.entries.length);
+          // Deep copy the entries to avoid reference issues
+          const entriesCopy = draft.entries.map(entry => ({...entry}));
+          setEntryForms(entriesCopy);
+          setActiveFormIndex(0);
+        }
+      }
     }
-  }, [createDraft, resumeName, draftId]);
+  }, [urlDraftId, resumeName]);
   
+  // Debug log when profile data changes
+  useEffect(() => {
+    console.log("Current profile data:", JSON.stringify(profileData, null, 2));
+  }, [profileData]);
+
+  // Debug log when draft or entry forms change
+  useEffect(() => {
+    if (draftId) {
+      console.log("Current draft ID:", draftId);
+      console.log("Current entry forms:", entryForms);
+    }
+  }, [draftId, entryForms]);
+
   // Sync resume name with profile name
   useEffect(() => {
     setProfileData(prev => ({
@@ -200,7 +263,7 @@ export default function CreateResumePage() {
       try {
         if (isEditMode && activeEntryIndex !== null) {
           updateEntry(draftId, activeEntryIndex, data);
-        } else {
+        } else if (isDraftMode) {
           addEntry(draftId, data);
         }
         setLastSavedEntry(new Date());
@@ -227,9 +290,88 @@ export default function CreateResumePage() {
     });
   };
   
+  // Handle creating a draft from current form data
+  const handleCreateDraft = () => {
+    // Validate that the user has filled in at least some information
+    const hasEnteredData = 
+      resumeName !== 'My Professional Resume' || // Custom resume name
+      profileData.name !== resumeName || // Custom profile name
+      profileData.headline || // Any headline
+      profileData.location || // Any location
+      profileData.bio || // Any bio
+      profileData.contactEmail || // Any email
+      entryForms.some(form => form.title || form.company || form.description); // Any entry data
+    
+    if (!hasEnteredData) {
+      setError('Please fill in some information before saving a draft.');
+      return;
+    }
+    
+    // Clear any existing errors
+    setError(null);
+    
+    // Ensure profile data has all required fields
+    const completeProfileData = {
+      name: profileData.name || resumeName,
+      headline: profileData.headline || '',
+      bio: profileData.bio || '',
+      location: profileData.location || '',
+      contactEmail: profileData.contactEmail || '',
+      socialLinks: profileData.socialLinks || {
+        linkedin: '',
+        github: '',
+        twitter: '',
+        website: ''
+      },
+      skills: profileData.skills || [],
+      languages: profileData.languages || [],
+      lastUpdated: new Date().toISOString()
+    };
+    
+    console.log("Saving profile data to draft:", completeProfileData);
+    
+    // Create a new draft or update existing one
+    if (!draftId) {
+      const newDraftId = createDraft(undefined, resumeName);
+      setDraftId(newDraftId);
+      setIsDraftMode(true);
+      
+      // Update the draft with current data
+      const draftUpdate = {
+        name: resumeName,
+        profileData: completeProfileData,
+        entries: entryForms.map(form => ({...form})), // Deep copy to avoid reference issues
+      };
+      
+      console.log("Creating new draft with data:", draftUpdate);
+      
+      useResumeDraftStore.getState().updateDraft(newDraftId, draftUpdate);
+      setSuccessMessage('Draft created successfully!');
+    } else {
+      // Update existing draft
+      const draftUpdate = {
+        name: resumeName,
+        profileData: completeProfileData,
+        entries: entryForms.map(form => ({...form})), // Deep copy to avoid reference issues
+      };
+      
+      console.log("Updating draft with data:", draftUpdate);
+      
+      useResumeDraftStore.getState().updateDraft(draftId, draftUpdate);
+      setSuccessMessage('Draft updated successfully!');
+    }
+  };
+  
   // Handle submitting entry to draft
   const handleSubmitEntryToDraft = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // If we're not in draft mode, create a draft first
+    if (!isDraftMode) {
+      handleCreateDraft();
+      return;
+    }
+    
     if (!draftId) return;
     
     // Validate all forms
@@ -281,26 +423,8 @@ export default function CreateResumePage() {
         // Reset form mode
         setActiveEntryIndex(null);
         setIsEditMode(false);
-      } else {
-        // Add all entries to the draft
-        for (const formEntry of entryForms) {
-          const newEntry = {
-            ...formEntry,
-            id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-          };
-          
-          addEntry(draftId, newEntry);
-        }
         
-        // Show success message
-        setLastSavedEntry(new Date());
-        setIsDirtyEntry(false);
-        markAsSaved();
-        
-        // Set success message
-        setSuccessMessage("Entries added successfully!");
-        
-        // Reset forms
+        // Reset forms only in edit mode
         setEntryForms([{
           type: entryTypeToString(EntryTypeEnum.WORK),
           title: '',
@@ -312,10 +436,72 @@ export default function CreateResumePage() {
         }]);
         setActiveFormIndex(0);
         setAttachments([]);
+      } else {
+        // Add all entries to the draft
+        const updatedEntries = [...entryForms];
+        
+        for (let i = 0; i < updatedEntries.length; i++) {
+          if (!updatedEntries[i].id) {
+            updatedEntries[i] = {
+              ...updatedEntries[i],
+              id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+            };
+          }
+        }
+        
+        // Prepare complete profile data
+        const completeProfileData = {
+          name: profileData.name || resumeName,
+          headline: profileData.headline || '',
+          bio: profileData.bio || '',
+          location: profileData.location || '',
+          contactEmail: profileData.contactEmail || '',
+          socialLinks: profileData.socialLinks || {
+            linkedin: '',
+            github: '',
+            twitter: '',
+            website: ''
+          },
+          skills: profileData.skills || [],
+          languages: profileData.languages || [],
+          lastUpdated: new Date().toISOString()
+        };
+        
+        // Update the entire draft with all current form data
+        const draftUpdate = {
+          name: resumeName,
+          profileData: completeProfileData,
+          entries: updatedEntries,
+          lastUpdated: new Date().toISOString()
+        };
+        
+        console.log("Updating draft with entries and profile:", JSON.stringify(draftUpdate, null, 2));
+        useResumeDraftStore.getState().updateDraft(draftId, draftUpdate);
+        
+        // Show success message
+        setLastSavedEntry(new Date());
+        setIsDirtyEntry(false);
+        markAsSaved();
+        
+        // Set success message
+        setSuccessMessage("Entries added successfully!");
+        
+        // Don't reset forms when adding new entries - keep current form data
       }
     } finally {
       setIsSavingEntry(false);
     }
+  };
+
+  // Handle saving and returning to dashboard
+  const handleSaveAndExit = () => {
+    // Create/update the draft
+    handleCreateDraft();
+    
+    // Redirect to dashboard
+    setTimeout(() => {
+      router.push('/dashboard');
+    }, 500); // Small delay to ensure draft is saved
   };
   
   // Handle submitting entry to blockchain
@@ -324,7 +510,7 @@ export default function CreateResumePage() {
     
     try {
       // Make sure draft is saved first
-      await handleSubmitEntryToDraft(e);
+      handleSubmitEntryToDraft(e);
       
       // Submit to blockchain - just the current entry
       if (entryForms.length > 0) {
@@ -464,22 +650,67 @@ export default function CreateResumePage() {
         // Create NFT on the blockchain if requested
         setCurrentStep('saving');
         
-        // Ensure profile data includes the most up-to-date name
+        // Ensure profile data includes all required fields
         const finalProfileData: ProfileMetadata = {
-          ...profileData as ProfileMetadata,
-          name: resumeName,
+          name: profileData.name || resumeName,
+          headline: profileData.headline || '',
+          bio: profileData.bio || '',
+          location: profileData.location || '',
+          contactEmail: profileData.contactEmail || '',
+          avatarUrl: profileData.avatarUrl || '',
+          skills: profileData.skills || [],
+          languages: profileData.languages || [],
+          socialLinks: profileData.socialLinks || {
+            linkedin: '',
+            github: '',
+            twitter: '',
+            website: ''
+          },
           lastUpdated: new Date().toISOString()
         };
         
-        // Create new resume with complete profile data
-        await createNewResume(resumeName, finalProfileData);
+        // Create a complete ResumeMetadata object
+        const resumeMetadata = {
+          version: '1.0',
+          profile: finalProfileData,
+          entries: validEntries,
+          chainId: 11155111, // Sepolia testnet
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        try {
+          console.log("Minting resume with metadata:", resumeMetadata);
+          // Create new resume with complete metadata
+          await createNewResume(resumeName, finalProfileData);
+          
+          // Redirect to dashboard after successful save
+          router.push('/dashboard');
+        } catch (mintError: any) {
+          console.error("Error minting resume:", mintError);
+          
+          // Check if it's a user cancellation error
+          if (mintError.code === 4001 || // MetaMask user rejected
+              mintError.message?.includes('user rejected') || 
+              mintError.message?.includes('cancelled') ||
+              mintError.message?.includes('canceled')) {
+            setError('Transaction was cancelled. Your resume is still saved as a draft.');
+            setCurrentStep('edit'); // Return to edit mode
+          } else {
+            setError(`Error minting resume: ${mintError.message || 'Unknown error'}`);
+            setCurrentStep('edit'); // Return to edit mode
+          }
+          
+          return;
+        }
+      } else {
+        // Just save as draft, then redirect
+        router.push('/dashboard');
       }
-      
-      // Redirect to dashboard after successful save
-      router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving resume:", error);
-      setError('An error occurred while saving your resume. Please try again.');
+      setError(`An error occurred while saving your resume: ${error.message || 'Unknown error'}`);
+      setCurrentStep('edit'); // Return to edit mode
     } finally {
       setIsSubmitting(false);
     }
@@ -514,7 +745,7 @@ export default function CreateResumePage() {
   }
 
   // Edit resume step
-  if (currentStep === 'edit' && draftId) {
+  if (currentStep === 'edit') {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex justify-between items-center mb-4">
@@ -523,6 +754,20 @@ export default function CreateResumePage() {
             <p className="text-gray-300 text-sm">
               Add your profile information and work experience to build your professional resume.
             </p>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleCreateDraft}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              {draftId ? 'Update Draft' : 'Save as Draft'}
+            </button>
+            <button
+              onClick={handleSaveAndExit}
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Save & Exit
+            </button>
           </div>
         </div>
 
@@ -569,6 +814,22 @@ export default function CreateResumePage() {
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden mb-6">
           <div className="p-6 border-b border-gray-700">
             <h2 className="text-xl font-semibold text-white mb-4">Profile Information</h2>
+            
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Full Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileData.name || ''}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="John Doe"
+                  required
+                />
+              </div>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -1036,6 +1297,68 @@ export default function CreateResumePage() {
           </div>
 
           <div className="p-6">
+            {/* Profile Information Summary */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-white pb-2 border-b border-gray-700 mb-4">
+                Profile Information
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row">
+                  <div className="md:w-1/4">
+                    <p className="text-gray-300 font-medium">Full Name</p>
+                  </div>
+                  <div className="md:w-3/4">
+                    <p className="text-white">{profileData.name || 'Not provided'}</p>
+                  </div>
+                </div>
+                
+                {profileData.headline && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Professional Headline</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <p className="text-white">{profileData.headline}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {profileData.location && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Location</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <p className="text-white">{profileData.location}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {profileData.contactEmail && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Contact Email</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <p className="text-white">{profileData.contactEmail}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {profileData.bio && (
+                  <div className="flex flex-col md:flex-row mt-4">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Professional Bio</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <p className="text-white whitespace-pre-line">{profileData.bio}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {Object.keys(entriesByType).length > 0 ? (
               Object.entries(entriesByType).map(([type, entries]) => (
                 <div key={type} className="mb-8 last:mb-0">
@@ -1111,9 +1434,20 @@ export default function CreateResumePage() {
           <p className="text-gray-300 mb-2">
             Please wait while we create your on-chain resume NFT.
           </p>
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-sm mb-8">
             This may take a minute. Please approve the transaction in your wallet when prompted.
           </p>
+          
+          <button
+            onClick={() => {
+              setCurrentStep('edit');
+              setIsSubmitting(false);
+              setError(null);
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );

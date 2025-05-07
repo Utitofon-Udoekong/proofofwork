@@ -6,11 +6,17 @@ import { ResumeEntry, EntryType } from "@/app/lib/types";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 import ResumeManager from "@/app/components/resume/ResumeManager";
 import ResumePreview from "@/app/components/resume/ResumePreview";
+import DraftsList from "@/app/components/resume/DraftsList";
+import { useRouter } from "next/navigation";
+import { useSortedDrafts } from "@/app/lib/stores/resumeDraftStore";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filteredType, setFilteredType] = useState<EntryType | 'all'>('all');
+  const drafts = useSortedDrafts();
+  const hasDrafts = drafts.length > 0;
   const { 
     walletConnected, 
     connectWallet, 
@@ -60,6 +66,11 @@ export default function DashboardPage() {
     if (confirm("Are you sure you want to delete this entry?")) {
       setResumeEntries(resumeEntries.filter(e => e.id !== entryId));
     }
+  };
+
+  // Handler for selecting a draft
+  const handleSelectDraft = (draftId: string) => {
+    router.push(`/dashboard/resume/create?draftId=${draftId}`);
   };
 
   // Helper function to get icon for entry type
@@ -191,7 +202,24 @@ export default function DashboardPage() {
   // Show a fallback UI when wallet is connected but no token ID is available
   if (walletConnected && !tokenId) {
     return (
-      <div className="container mx-auto px-4 py-16 max-w-2xl">
+      <div className="container mx-auto px-4 py-16 max-w-4xl">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-white">Your Resume</h1>
+          <Link 
+            href="/dashboard/resume/create" 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
+            Create Resume
+          </Link>
+        </div>
+
+        {/* Resume Drafts - Only show if there are drafts */}
+        {hasDrafts && (
+          <div className="bg-gray-800 rounded-lg shadow-md p-4 mb-6 border border-gray-700">
+            <DraftsList onSelectDraft={handleSelectDraft} className="text-white" />
+          </div>
+        )}
+
         <div className="bg-gray-800 p-8 rounded-lg shadow-md border border-gray-700">
           <h1 className="text-2xl font-bold mb-4 text-white">Create Your First Resume</h1>
           <p className="text-gray-300 mb-6">
@@ -222,15 +250,20 @@ export default function DashboardPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-white">Your Resume</h1>
-        {walletConnected && tokenId && (
-          <Link 
-            href="/dashboard/resume/create" 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-          >
-            Add New Entry
-          </Link>
-        )}
+        <Link 
+          href="/dashboard/resume/create" 
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+        >
+          Create Resume
+        </Link>
       </div>
+
+      {/* Resume Drafts - Only show if there are drafts */}
+      {hasDrafts && (
+        <div className="bg-gray-800 rounded-lg shadow-md p-4 mb-6 border border-gray-700">
+          <DraftsList onSelectDraft={handleSelectDraft} className="text-white" />
+        </div>
+      )}
 
       {!walletConnected ? (
         <div className="text-center py-16 bg-gray-800 rounded-lg shadow-md border border-gray-700">
