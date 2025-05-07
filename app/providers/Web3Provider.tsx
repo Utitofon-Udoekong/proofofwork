@@ -12,17 +12,19 @@ import { WagmiProvider, createConfig, http } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 import { userHasWallet } from "@civic/auth-web3";
 import { embeddedWallet } from "@civic/auth-web3/wagmi";
-import { CivicAuthProvider, useUser } from "@civic/auth-web3/react";
+import { CivicAuthProvider } from "@civic/auth-web3/nextjs";
+import { useUser } from "@civic/auth-web3/react";
 import { useAccount, useConnect, useBalance } from "wagmi";
 import { useAutoConnect } from "@civic/auth-web3/wagmi";
 import { ethers } from 'ethers';
-import { ResumeEntry, EntryType } from '@/app/lib/types';
+import { ResumeEntry, EntryType, ProfileMetadata } from '@/app/lib/types';
 import { 
   ResumeNFT__factory,
   VerificationRegistry__factory,
   ContractStructs
 } from '@/app/lib/contracts/contract-types';
 import { contractAddresses } from '@/app/lib/contracts/addresses';
+import { ipfsService } from '@/app/lib/services/ipfs';
 
 // Helper function to convert EntryType string to uint8 for contract
 const entryTypeToUint8 = (type: EntryType): number => {
@@ -62,9 +64,8 @@ const queryClient = new QueryClient();
 
 // Configure Wagmi
 const wagmiConfig = createConfig({
-  chains: [mainnet, sepolia],
+  chains: [sepolia],
   transports: {
-    [mainnet.id]: http(),
     [sepolia.id]: http(),
   },
   connectors: [
@@ -93,7 +94,7 @@ interface Web3ContextType {
   getResumeEntries: () => Promise<ResumeEntry[]>;
   addResumeEntry: (entryData: any) => Promise<{ success: boolean; entryIndex?: number }>;
   requestVerification: (entryIndex: number) => Promise<{ success: boolean }>;
-  createNewResume: (name?: string) => Promise<bigint>;
+  createNewResume: (name: string, profileData?: Partial<ProfileMetadata>) => Promise<string>;
   selectResume: (id: bigint) => void;
   updateResumeName: (id: bigint, name: string) => Promise<void>;
   isLoading: boolean;
@@ -106,7 +107,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <WagmiProvider config={wagmiConfig}>
-        <CivicAuthProvider clientId={process.env.NEXT_PUBLIC_CIVIC_CLIENT_ID!}>
+        <CivicAuthProvider>
           <Web3ProviderInner>
             {children}
           </Web3ProviderInner>
@@ -119,9 +120,14 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 // Inner provider component that has access to hooks
 function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const userContext = useUser();
-  const { address, isConnected } = useAccount();
+  const { address: wagmiAddress, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
-  const { data: balanceData } = useBalance({ address });
+  const { data: balanceData } = useBalance({ 
+    address: userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress 
+  });
+  
+  // Determine the primary wallet address (prioritize Civic Auth's embedded wallet)
+  const address = userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress;
   
   const [tokenId, setTokenId] = useState<bigint | null>(null);
   const [tokenIds, setTokenIds] = useState<bigint[]>([]);
@@ -158,7 +164,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   
   // Get contracts
   const getResumeNFTContract = useCallback(async () => {
-    if (!isConnected || !address) {
+    if (!address) {
       throw new Error("Wallet not connected");
     }
     
@@ -166,67 +172,125 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     const signer = await provider.getSigner();
     const resumeNFTAddress = contractAddresses.resumeNFT || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
     return ResumeNFT__factory.connect(resumeNFTAddress, signer);
-  }, [isConnected, address]);
+  }, [address]);
   
-  // Get token IDs when wallet connected
+  const getVerificationRegistryContract = useCallback(async () => {
+    if (!address) {
+      throw new Error("Wallet not connected");
+    }
+    
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const registryAddress = contractAddresses.verificationRegistry || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+    return VerificationRegistry__factory.connect(registryAddress, signer);
+  }, [address]);
+  
+  // Get tokens
   useEffect(() => {
     const getTokenIds = async () => {
-      if (isConnected && address) {
+      if (address) {
         try {
           const resumeNFT = await getResumeNFTContract();
-          const ids = await resumeNFT.getEntriesByOwner(address);
           
-          setTokenIds(ids);
-          
-          // Set the active token ID to the first one if available
-          if (ids && ids.length > 0) {
-            setTokenId(ids[0]);
-          } else {
-            setTokenId(null);
+          // First check if the contract has the function
+          if (typeof resumeNFT.getEntriesByOwner !== 'function') {
+            console.error("Contract function getEntriesByOwner not found");
+            return;
+          }
+
+          try {
+            // Call with catch to handle specific contract errors
+            const tokenIds = await resumeNFT.getEntriesByOwner(address);
+            setTokenIds(tokenIds || []);
+            
+            // Set the first token as active if none is selected
+            if (tokenIds && tokenIds.length > 0 && !tokenId) {
+              setTokenId(tokenIds[0]);
+            }
+          } catch (contractError) {
+            console.error("Error calling getEntriesByOwner:", contractError);
+            
+            // Fallback: Try to get tokens by balanceOf and tokenOfOwnerByIndex if available
+            try {
+              if (typeof resumeNFT.balanceOf === 'function' && 
+                  typeof resumeNFT.tokenOfOwnerByIndex === 'function') {
+                
+                const balance = await resumeNFT.balanceOf(address);
+                const tokenIds = [];
+                
+                for (let i = 0; i < balance; i++) {
+                  const tokenId = await resumeNFT.tokenOfOwnerByIndex(address, i);
+                  tokenIds.push(tokenId);
+                }
+                
+                setTokenIds(tokenIds);
+                
+                if (tokenIds.length > 0 && !tokenId) {
+                  setTokenId(tokenIds[0]);
+                }
+              } else {
+                console.error("Alternative token fetching methods not available");
+              }
+            } catch (fallbackError) {
+              console.error("Error in fallback token fetching:", fallbackError);
+            }
           }
         } catch (error) {
-          console.error("Error getting user's token IDs:", error);
+          console.error("Error getting token IDs:", error);
+          // Don't let this crash the app
+          setTokenIds([]);
         }
       }
     };
     
     getTokenIds();
-  }, [isConnected, address, getResumeNFTContract]);
+  }, [address, getResumeNFTContract, tokenId]);
   
-  // Create a new resume NFT
-  const createNewResume = async (name?: string) => {
+  // Create a new resume
+  const createNewResume = async (name: string, profileData?: Partial<ProfileMetadata>) => {
+    if (!isConnected || !address) {
+      throw new Error("Wallet not connected. Please connect your wallet first.");
+    }
+
     try {
       setIsLoading(true);
-      
-      if (!isConnected || !address) {
-        throw new Error("Wallet not connected");
-      }
-      
-      const resumeName = name || `Resume #${tokenIds.length + 1}`;
-      
-      // Create a metadata object for the resume
-      const metadata = {
-        name: resumeName,
-        description: `ProofOfWork Resume - ${resumeName}`,
-        image: "https://proofofwork.crypto/logo.png", // Replace with actual logo URL
-        created_at: new Date().toISOString(),
-        owner: address,
-        attributes: []
+      console.log("Creating new resume for address:", address);
+
+      // Create standardized profile metadata
+      const defaultProfileData: ProfileMetadata = {
+        name: name || "My Professional Resume",
+        headline: profileData?.headline || "",
+        bio: profileData?.bio || "", 
+        location: profileData?.location || "",
+        contactEmail: profileData?.contactEmail || "",
+        avatarUrl: profileData?.avatarUrl || "",
+        skills: profileData?.skills || [],
+        languages: profileData?.languages || [],
+        socialLinks: profileData?.socialLinks || {},
+        lastUpdated: new Date().toISOString()
       };
-      
-      // In a production app, we would upload this metadata to IPFS or another decentralized storage
-      // For now, we'll create a base64-encoded data URI using our safe encoding function
-      const metadataStr = JSON.stringify(metadata);
-      const metadataUri = `data:application/json;base64,${safeEncode(metadataStr)}`;
-      
+
+      // Combine with any additional fields from passed profileData
+      const mergedProfileData = {
+        ...defaultProfileData,
+        ...profileData, 
+        name: name || defaultProfileData.name // Ensure name is set
+      };
+
+      // Upload to IPFS
+      const metadataUri = await ipfsService.uploadStandardResumeMetadata(mergedProfileData);
+      console.log("Resume metadata uploaded to IPFS:", metadataUri);
+
+      // Get the contract
       const resumeNFT = await getResumeNFTContract();
-      
-      // Mint a new resume NFT with the metadata URI
       const tx = await resumeNFT.mintResume(address, metadataUri);
+
+      console.log("Minting transaction sent:", tx.hash);
       const receipt = await tx.wait();
-      
-      // Get the token ID from the event
-      const event = receipt?.logs.find(log => {
+      console.log("Transaction confirmed:", receipt);
+
+      // Find the token ID from the event
+      const mintEvent = receipt?.logs.find(log => {
         try {
           const parsedLog = resumeNFT.interface.parseLog(log);
           return parsedLog?.name === "ResumeMinted";
@@ -234,28 +298,20 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           return false;
         }
       });
-      
-      if (event) {
-        const parsedLog = resumeNFT.interface.parseLog(event);
+
+      if (mintEvent) {
+        const parsedLog = resumeNFT.interface.parseLog(mintEvent);
         const newTokenId = parsedLog?.args.tokenId;
+        console.log("New resume token ID:", newTokenId);
         
-        // Update the token IDs and set the active token ID
-        setTokenIds(prev => [...prev, newTokenId]);
-        setTokenId(newTokenId);
+        // Update state
+        setTokenId(newTokenId?.toString());
         
-        // Save the resume name
-        setResumeNames(prev => ({
-          ...prev,
-          [newTokenId.toString()]: {
-            name: resumeName,
-            createdAt: new Date().toISOString()
-          }
-        }));
-        
-        return newTokenId;
+        return newTokenId?.toString();
+      } else {
+        console.error("Could not find ResumeMinted event in transaction logs");
+        throw new Error("Resume creation failed: Event not found");
       }
-      
-      throw new Error("Failed to get token ID from transaction");
     } catch (error) {
       console.error("Error creating resume:", error);
       throw error;
@@ -273,9 +329,15 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // Connect wallet helper
+  // Connect wallet helper - prioritize connecting to the Civic embedded wallet
   const connectWallet = async () => {
-    if (!isConnected) {
+    // Find the embedded wallet connector (Civic)
+    const embeddedConnector = connectors.find(c => c.name?.toLowerCase().includes('embedded'));
+    
+    if (embeddedConnector) {
+      await connect({ connector: embeddedConnector });
+    } else {
+      // Fallback to the first connector if Civic's embedded wallet connector isn't found
       await connect({ connector: connectors[0] });
     }
   };
@@ -290,7 +352,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   
   // Get resume entries
   const getResumeEntries = async (): Promise<ResumeEntry[]> => {
-    if (!isConnected || !address || !tokenId) {
+    if (!address || !tokenId) {
       return [];
     }
     
@@ -299,7 +361,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       const entries = await resumeNFT.getResumeEntries(tokenId);
       
       // Transform the contract data to our ResumeEntry format
-      return entries.map((entry: ContractStructs.ResumeEntryStructOutput, index: number) => {
+      const transformedEntries = await Promise.all(entries.map(async (entry: ContractStructs.ResumeEntryStructOutput, index: number) => {
         // Convert the numeric entryType to string EntryType
         const type = uint8ToEntryType(Number(entry.entryType));
         
@@ -307,7 +369,30 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         let additionalFields = {};
         try {
           if (entry.metadata) {
-            additionalFields = JSON.parse(entry.metadata);
+            const parsedMetadata = JSON.parse(entry.metadata);
+            
+            // Check if this metadata is stored on IPFS
+            if (parsedMetadata.ipfsUri) {
+              try {
+                // We need to fetch the actual metadata from IPFS
+                const ipfsUrl = ipfsService.getHttpUrl(parsedMetadata.ipfsUri);
+                const response = await fetch(ipfsUrl);
+                
+                if (response.ok) {
+                  // Successfully fetched the metadata from IPFS
+                  additionalFields = await response.json();
+                } else {
+                  console.error("Failed to fetch metadata from IPFS:", response.statusText);
+                  additionalFields = { ipfsUri: parsedMetadata.ipfsUri };
+                }
+              } catch (ipfsError) {
+                console.error("Error fetching from IPFS:", ipfsError);
+                additionalFields = { ipfsUri: parsedMetadata.ipfsUri };
+              }
+            } else {
+              // Metadata is stored directly on-chain
+              additionalFields = parsedMetadata;
+            }
           }
         } catch (e) {
           console.error("Failed to parse metadata JSON:", e);
@@ -327,7 +412,9 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           organization: entry.organization,
           ...additionalFields
         };
-      });
+      }));
+      
+      return transformedEntries;
     } catch (error) {
       console.error("Error getting resume entries:", error);
       return [];
@@ -347,7 +434,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     [key: string]: any;
   }) => {
     try {
-      if (!isConnected || !address || !tokenId) {
+      if (!address || !tokenId) {
         throw new Error("Resume not initialized");
       }
       
@@ -365,8 +452,40 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       // Extract core fields to avoid duplication in metadata
       const { title, description, startDate, endDate, organization, company, type, ...additionalFields } = entryData;
       
-      // Create a metadata object to store additional fields based on entry type
-      const metadata = JSON.stringify(additionalFields);
+      // Create a metadata object for additional fields based on entry type
+      const entryMetadata = {
+        ...additionalFields,
+        entryType: type,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Upload entry-specific metadata to IPFS if there are additional fields
+      let metadataJson = "{}";
+      
+      if (Object.keys(additionalFields).length > 0) {
+        try {
+          // Check if the metadata is large (over 200 chars when stringified)
+          // If it's large, store it on IPFS; otherwise, store directly on-chain
+          const rawMetadataJson = JSON.stringify(entryMetadata);
+          
+          if (rawMetadataJson.length > 200) {
+            // For larger metadata sets, store them on IPFS
+            const metadataUri = await ipfsService.uploadResumeMetadata(entryMetadata);
+            
+            // Store just the IPFS URI on-chain instead of the full metadata
+            metadataJson = JSON.stringify({ 
+              ipfsUri: metadataUri,
+              size: rawMetadataJson.length
+            });
+          } else {
+            // For smaller metadata, just store directly on-chain
+            metadataJson = rawMetadataJson;
+          }
+        } catch (error) {
+          console.error("Error creating metadata JSON:", error);
+          metadataJson = JSON.stringify(entryMetadata);
+        }
+      }
       
       // Use the typed contract method
       const resumeNFT = await getResumeNFTContract();
@@ -378,7 +497,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         BigInt(startTimestamp),
         BigInt(endTimestamp),
         entryData.organization || entryData.company,
-        metadata
+        metadataJson
       );
       
       const receipt = await tx.wait();
@@ -397,14 +516,14 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         const parsedLog = resumeNFT.interface.parseLog(event);
         return { 
           success: true, 
-          entryIndex: Number(parsedLog?.args.entryIndex)
+          entryIndex: Number(parsedLog?.args.entryIndex) 
         };
       }
       
       return { success: true };
     } catch (error) {
       console.error("Error adding resume entry:", error);
-      throw error;
+      return { success: false };
     } finally {
       setIsLoading(false);
     }
@@ -413,7 +532,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   // Request verification
   const requestVerification = async (entryIndex: number) => {
     try {
-      if (!isConnected || !address || !tokenId) {
+      if (!address || !tokenId) {
         throw new Error("Resume not initialized");
       }
       
@@ -438,23 +557,14 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   
   // Update resume name
   const updateResumeName = async (id: bigint, name: string) => {
-    if (!tokenIds.includes(id)) {
-      console.error("Invalid token ID:", id);
-      return;
-    }
-    
     try {
-      // Update in local state first for immediate UI feedback
-      setResumeNames(prev => {
-        const current = prev[id.toString()] || { createdAt: new Date().toISOString() };
-        return {
-          ...prev,
-          [id.toString()]: {
-            ...current,
-            name
-          }
-        };
-      });
+      setResumeNames(prev => ({
+        ...prev,
+        [id.toString()]: {
+          ...prev[id.toString()],
+          name
+        }
+      }));
       
       // Try to update on-chain metadata if connected
       if (isConnected && address) {
@@ -471,8 +581,8 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           attributes: []
         };
         
-        const metadataStr = JSON.stringify(metadata);
-        const metadataUri = `data:application/json;base64,${safeEncode(metadataStr)}`;
+        // Upload metadata to IPFS
+        const metadataUri = await ipfsService.uploadResumeMetadata(metadata);
         
         // Get contract instance
         const resumeNFT = await getResumeNFTContract();
@@ -523,7 +633,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   // Create context value
   const contextValue: Web3ContextType = {
     userAuthenticated: !!userContext.user,
-    walletConnected: isConnected,
+    walletConnected: !!address,
     address: address || null,
     balance: balanceData ? `${(Number(balanceData.value) / 10**18).toFixed(4)} ${balanceData.symbol}` : null,
     tokenId,

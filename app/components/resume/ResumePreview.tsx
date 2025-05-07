@@ -51,12 +51,12 @@ export default function ResumePreview() {
   
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-4 animate-pulse">
-        <div className="h-5 bg-gray-200 rounded w-1/3 mb-4"></div>
+      <div className="bg-gray-800 rounded-lg shadow-md p-4 animate-pulse border border-gray-700">
+        <div className="h-5 bg-gray-700 rounded w-1/3 mb-4"></div>
         <div className="space-y-3">
-          <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-3 bg-gray-200 rounded"></div>
-          <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+          <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+          <div className="h-3 bg-gray-700 rounded"></div>
+          <div className="h-3 bg-gray-700 rounded w-5/6"></div>
         </div>
       </div>
     );
@@ -67,25 +67,25 @@ export default function ResumePreview() {
   }
   
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 className="text-lg font-semibold mb-3">{getResumeName()}</h2>
+    <div className="bg-gray-800 rounded-lg shadow-md p-4 mb-6 border border-gray-700">
+      <h2 className="text-lg font-semibold mb-3 text-white">{getResumeName()}</h2>
       
       {entries.length === 0 ? (
-        <p className="text-sm text-gray-500">No entries in this resume yet</p>
+        <p className="text-sm text-gray-400">No entries in this resume yet</p>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-gray-600">{entries.length} entries total • {entries.filter(e => e.verified).length} verified</p>
+          <p className="text-sm text-gray-400">{entries.length} entries total • {entries.filter(e => e.verified).length} verified</p>
           
           <div className="max-h-60 overflow-y-auto space-y-2">
             {entries.map((entry, index) => (
-              <div key={index} className="text-sm border-l-2 pl-3 py-1 border-gray-200">
+              <div key={index} className="text-sm border-l-2 pl-3 py-1 border-gray-600">
                 <div className="flex items-center gap-1">
                   <span>{getEntryTypeIcon(entry.type)}</span>
-                  <span className="font-medium">{entry.title}</span>
-                  {entry.verified && <span className="ml-1 text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded-full">✓</span>}
+                  <span className="font-medium text-white">{entry.title}</span>
+                  {entry.verified && <span className="ml-1 text-xs bg-green-900/60 text-green-300 px-1 py-0.5 rounded-full border border-green-700">✓</span>}
                 </div>
-                <div className="text-gray-600">{entry.company}</div>
-                <div className="text-xs text-gray-500">{entry.startDate} - {entry.endDate}</div>
+                <div className="text-gray-300">{entry.company}</div>
+                <div className="text-xs text-gray-400">{entry.startDate} - {entry.endDate}</div>
               </div>
             ))}
           </div>

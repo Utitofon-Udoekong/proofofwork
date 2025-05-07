@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@civic/auth-web3/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,14 +17,16 @@ export default function DashboardLayout({
     { name: "Profile", href: "/dashboard/profile" },
   ];
 
+  const {user} = useUser()
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-gray-300">
+      <nav className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <Link href="/" className="text-xl font-bold text-blue-600">
+                <Link href="/" className="text-xl font-bold text-blue-400">
                   ProofOfWork
                 </Link>
               </div>
@@ -34,8 +37,8 @@ export default function DashboardLayout({
                     href={item.href}
                     className={`${
                       pathname === item.href
-                        ? "border-blue-500 text-gray-900"
-                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                        ? "border-blue-500 text-white"
+                        : "border-transparent text-gray-400 hover:border-gray-600 hover:text-gray-300"
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                   >
                     {item.name}
@@ -46,7 +49,7 @@ export default function DashboardLayout({
             <div className="flex items-center">
               <button
                 type="button"
-                className="text-gray-600 hover:text-gray-800 p-2 rounded-full"
+                className="text-gray-400 hover:text-gray-300 p-2 rounded-full"
               >
                 <span className="sr-only">View notifications</span>
                 <svg
@@ -69,14 +72,14 @@ export default function DashboardLayout({
                 <div>
                   <button
                     type="button"
-                    className="bg-gray-800 flex text-sm rounded-full focus:outline-none"
+                    className="bg-gray-700 flex text-sm rounded-full focus:outline-none"
                     id="user-menu-button"
                     aria-expanded="false"
                     aria-haspopup="true"
                   >
                     <span className="sr-only">Open user menu</span>
                     <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                      U
+                      {user?.name?.charAt(0)}
                     </div>
                   </button>
                 </div>

@@ -23,6 +23,23 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```bash
+# Required for NFT.Storage integration (for storing NFT metadata)
+NEXT_PUBLIC_NFT_STORAGE_TOKEN=your_nft_storage_token
+
+# Optional: Web3.Storage configuration (alternative storage option)
+NEXT_PUBLIC_WEB3_STORAGE_TOKEN=your_web3_storage_token
+NEXT_PUBLIC_WEB3_STORAGE_EMAIL=your_web3_storage_email@example.com
+```
+
+You can get API tokens by:
+- NFT.Storage: Register at [nft.storage](https://nft.storage) to get an API token
+- Web3.Storage: Register at [web3.storage](https://web3.storage) to get an API token and create an account with your email
+
 ### Smart Contract Management
 
 This project includes scripts to manage smart contracts from the root directory:

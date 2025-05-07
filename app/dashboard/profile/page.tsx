@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserButton } from "@civic/auth-web3/react";
+import { UserButton, useUser } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 
 export default function ProfilePage() {
@@ -11,10 +11,11 @@ export default function ProfilePage() {
     walletConnected, 
     address, 
     balance, 
-    connectWallet, 
-    createWallet,
     getResumeEntries
   } = useWeb3();
+  
+  // Get user data from Civic Auth
+  const civicUser = useUser();
   
   // Form state
   const [name, setName] = useState("");
@@ -37,12 +38,15 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadUserData = async () => {
       if (userAuthenticated) {
-        // In a real implementation, fetch this from a backend or IPFS
-        // For now, use mock data
-        setName("John Doe");
-        setEmail("john.doe@example.com");
-        setBio("Blockchain developer with 5+ years of experience in smart contract development and decentralized applications.");
-        setSkills("Solidity, React, TypeScript, Ethereum, Web3.js");
+        // Use actual user data from Civic Auth when available
+        if (civicUser.user) {
+          setName(civicUser.user.name || "");
+          setEmail(civicUser.user.email || "");
+          
+          // Still use some placeholder data for fields Civic doesn't provide
+          setBio(bio || "Blockchain developer with experience in smart contract development and decentralized applications.");
+          setSkills(skills || "Solidity, React, TypeScript, Ethereum, Web3.js");
+        }
         
         // Load stats from blockchain
         if (walletConnected) {
@@ -54,7 +58,7 @@ export default function ProfilePage() {
               totalEntries: entries.length,
               verifiedEntries: entries.filter(entry => entry.verified).length,
               pendingVerifications: entries.filter(entry => !entry.verified).length,
-              profileViews: 27 // Mock data
+              profileViews: stats.profileViews // Keep existing view count
             });
           } catch (error) {
             console.error("Error loading resume stats:", error);
@@ -64,7 +68,7 @@ export default function ProfilePage() {
     };
     
     loadUserData();
-  }, [userAuthenticated, walletConnected, getResumeEntries]);
+  }, [userAuthenticated, walletConnected, getResumeEntries, civicUser.user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,13 +99,13 @@ export default function ProfilePage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Your Profile</h1>
+      <h1 className="text-3xl font-bold mb-8 text-white">Your Profile</h1>
       
       {/* Show login button if user is not authenticated */}
       {!userAuthenticated ? (
-        <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-          <h2 className="text-2xl font-bold mb-4">Sign In</h2>
-          <p className="text-gray-600 mb-6">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-md border border-gray-700 text-center">
+          <h2 className="text-2xl font-bold mb-4 text-white">Sign In</h2>
+          <p className="text-gray-300 mb-6">
             Please sign in to view and manage your profile.
           </p>
           <UserButton />
@@ -110,86 +114,83 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Wallet Info */}
           <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
-              <h2 className="text-xl font-semibold mb-4">Wallet Information</h2>
+            <div className="bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700 mb-6">
+              <h2 className="text-xl font-semibold mb-4 text-white">Wallet Information</h2>
               
               {walletConnected ? (
                 <>
                   <div className="mb-4">
-                    <p className="text-sm text-gray-500 mb-1">Connected Address</p>
-                    <p className="text-sm font-mono bg-gray-100 p-2 rounded break-all">
+                    <p className="text-sm text-gray-400 mb-1">Connected Address</p>
+                    <p className="text-sm font-mono bg-gray-700 p-2 rounded break-all text-white">
                       {address}
                     </p>
                   </div>
                   
                   <div className="mb-4">
-                    <p className="text-sm text-gray-500 mb-1">Balance</p>
-                    <p className="text-sm font-medium">
+                    <p className="text-sm text-gray-400 mb-1">Balance</p>
+                    <p className="text-sm font-medium text-white">
                       {balance || "Loading..."}
                     </p>
                   </div>
                   
                   <div className="flex items-center mb-4">
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                    <p className="text-sm text-gray-700">Connected with Civic Auth</p>
+                    <p className="text-sm text-gray-300">Connected with Civic Auth</p>
                   </div>
                   
-                  <div className="text-sm text-green-600 font-medium">Wallet connected ✓</div>
+                  <div className="text-sm text-green-400 font-medium">Wallet connected ✓</div>
                 </>
               ) : (
                 <div>
-                  <p className="text-sm text-gray-700 mb-4">
-                    You don't have a wallet yet. Create one to start using the platform.
+                  <p className="text-sm text-gray-300 mb-4">
+                    Your wallet is being created automatically. Please wait...
                   </p>
-                  <button
-                    onClick={() => createWallet()}
-                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Create Wallet
-                  </button>
+                  <div className="flex justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+                  </div>
                 </div>
               )}
             </div>
             
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">Resume Stats</h2>
+            <div className="bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-white">Resume Stats</h2>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total Entries</span>
-                  <span className="font-medium">{stats.totalEntries}</span>
+                  <span className="text-gray-400">Total Entries</span>
+                  <span className="font-medium text-white">{stats.totalEntries}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Verified Entries</span>
-                  <span className="font-medium">{stats.verifiedEntries}</span>
+                  <span className="text-gray-400">Verified Entries</span>
+                  <span className="font-medium text-white">{stats.verifiedEntries}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Pending Verifications</span>
-                  <span className="font-medium">{stats.pendingVerifications}</span>
+                  <span className="text-gray-400">Pending Verifications</span>
+                  <span className="font-medium text-white">{stats.pendingVerifications}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Profile Views</span>
-                  <span className="font-medium">{stats.profileViews}</span>
+                  <span className="text-gray-400">Profile Views</span>
+                  <span className="font-medium text-white">{stats.profileViews}</span>
                 </div>
               </div>
               
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="text-md font-medium mb-3">Public Resume Link</h3>
+              <div className="mt-6 pt-6 border-t border-gray-600">
+                <h3 className="text-md font-medium mb-3 text-white">Public Resume Link</h3>
                 <div className="flex items-center">
                   <input
                     type="text"
                     readOnly
-                    value={address ? `proof-of-work.xyz/resume/${address.slice(0, 10)}...` : "Connect wallet first"}
-                    className="flex-1 text-sm bg-gray-100 p-2 rounded-l"
+                    value={address ? `proof-of-work.xyz/dashboard/resume/${address.slice(0, 10)}...` : "Wallet connecting..."}
+                    className="flex-1 text-sm bg-gray-700 p-2 rounded-l text-white"
                   />
                   <button
                     onClick={() => {
                       if (address) {
-                        navigator.clipboard.writeText(`https://proof-of-work.xyz/resume/${address}`);
+                        navigator.clipboard.writeText(`https://proof-of-work.xyz/dashboard/resume/${address}`);
                         alert("Link copied to clipboard!");
                       }
                     }}
                     disabled={!address}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-r disabled:bg-gray-400"
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-r disabled:bg-gray-600"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
@@ -203,11 +204,11 @@ export default function ProfilePage() {
           
           {/* Right Column - Profile Form */}
           <div className="lg:col-span-2">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-6">Profile Details</h2>
+            <div className="bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700">
+              <h2 className="text-xl font-semibold mb-6 text-white">Profile Details</h2>
               
               {saveSuccess && (
-                <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <div className="mb-6 bg-green-900/40 border border-green-600 text-green-300 px-4 py-3 rounded relative">
                   <span className="block sm:inline">Profile saved successfully!</span>
                 </div>
               )}
@@ -215,7 +216,7 @@ export default function ProfilePage() {
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
                       Full Name
                     </label>
                     <input
@@ -223,13 +224,13 @@ export default function ProfilePage() {
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter your full name"
                     />
                   </div>
                   
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
                       Email
                     </label>
                     <input
@@ -237,14 +238,14 @@ export default function ProfilePage() {
                       id="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter your email"
                     />
                   </div>
                 </div>
                 
                 <div className="mb-6">
-                  <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="bio" className="block text-sm font-medium text-gray-300 mb-1">
                     Professional Bio
                   </label>
                   <textarea
@@ -252,13 +253,13 @@ export default function ProfilePage() {
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Write a brief professional bio"
                   ></textarea>
                 </div>
                 
                 <div className="mb-6">
-                  <label htmlFor="skills" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="skills" className="block text-sm font-medium text-gray-300 mb-1">
                     Skills (comma separated)
                   </label>
                   <input
@@ -266,7 +267,7 @@ export default function ProfilePage() {
                     id="skills"
                     value={skills}
                     onChange={(e) => setSkills(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder="e.g. Solidity, React, JavaScript"
                   />
                 </div>
@@ -278,13 +279,13 @@ export default function ProfilePage() {
                       type="checkbox"
                       checked={profileVisible}
                       onChange={(e) => setProfileVisible(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="h-4 w-4 text-blue-600 border-gray-600 rounded focus:ring-blue-500 bg-gray-700"
                     />
-                    <label htmlFor="profileVisible" className="ml-2 block text-sm text-gray-700">
+                    <label htmlFor="profileVisible" className="ml-2 block text-sm text-gray-300">
                       Make my profile publicly visible
                     </label>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-gray-400">
                     When enabled, your profile will be visible to anyone with your public link.
                   </p>
                 </div>
@@ -294,7 +295,7 @@ export default function ProfilePage() {
                     type="submit"
                     disabled={isSaving || !walletConnected}
                     className={`px-4 py-2 rounded-md text-white font-medium ${
-                      isSaving || !walletConnected ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
+                      isSaving || !walletConnected ? "bg-gray-600" : "bg-blue-600 hover:bg-blue-700"
                     }`}
                   >
                     {isSaving ? "Saving..." : "Save Profile"}
