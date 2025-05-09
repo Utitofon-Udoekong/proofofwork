@@ -17,7 +17,7 @@ async function main() {
   console.log(`VerificationRegistry deployed to: ${registryAddress}`);
   
   // Save the contract address
-  const addresses = await saveContractAddresses({
+  const addresses = saveContractAddresses({
     verificationRegistry: registryAddress,
     networkName,
   });

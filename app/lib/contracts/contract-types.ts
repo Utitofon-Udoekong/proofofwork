@@ -7,10 +7,10 @@ export {
     ResumeNFT__factory,
     VerificationRegistry__factory
 };
-    export type {
-        ResumeNFT,
+export type {
+    ResumeNFT,
         VerificationRegistry
-    };
+};
 
 // Export types for contract initialization
 export type ContractTypes = {
@@ -19,4 +19,4 @@ export type ContractTypes = {
 };
 
 // Export the structured types we need
-export type { ResumeNFT as ContractStructs } from '../../../contract-create/typechain-types/contracts/ResumeNFT'; 
+export type { ResumeNFT as ContractStructs } from '../../../contract-create/typechain-types/contracts/ResumeNFT';

@@ -250,12 +250,12 @@ export default function DashboardPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-white">Your Resume</h1>
-        <Link 
+          <Link 
           href="/dashboard/resume/create" 
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-        >
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
           Create Resume
-        </Link>
+          </Link>
       </div>
 
       {/* Resume Drafts - Only show if there are drafts */}

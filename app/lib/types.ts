@@ -22,6 +22,7 @@ export interface ResumeEntry {
   verified: boolean;
   organization?: string; // Verifying organization
   verificationRequested?: boolean;
+  attachments?: string[]; // Array of IPFS URIs for attachments
   
   // Work-specific fields
   role?: string;
@@ -92,10 +93,19 @@ export interface ProfileMetadata {
 
 // Complete resume metadata structure with both profile and entries
 export interface ResumeMetadata {
-  version: string; // For versioning the metadata structure
+  version: string;
   profile: ProfileMetadata;
-  entries?: ResumeEntry[]; // Optional - entries can also be stored on-chain
-  chainId?: number; // The blockchain network ID
-  createdAt: string; // ISO date string
-  updatedAt: string; // ISO date string
+  entries: ResumeEntry[];
+  chainId?: number;
+  createdAt: string;
+  updatedAt: string;
+  tokenId?: string;
+  name?: string;
+  description?: string;
+  image?: string;
+  external_url?: string;
+  attributes?: Array<{
+    trait_type: string;
+    value: string;
+  }>;
 } 

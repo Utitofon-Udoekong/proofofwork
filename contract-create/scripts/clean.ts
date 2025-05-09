@@ -40,9 +40,14 @@ async function main() {
         if (stats.isDirectory()) {
           // Special case for contracts directory - don't delete the directory itself
           if (cleanPath.includes('lib/contracts')) {
-            // Only remove files within the directory
+            // Only remove files within the directory, preserving contract-types.ts
             const files = fs.readdirSync(cleanPath);
             for (const file of files) {
+              // Skip contract-types.ts
+              if (file === 'contract-types.ts') {
+                console.log(`  Preserving: ${file}`);
+                continue;
+              }
               const filePath = path.join(cleanPath, file);
               fs.unlinkSync(filePath);
               console.log(`  Deleted file: ${file}`);

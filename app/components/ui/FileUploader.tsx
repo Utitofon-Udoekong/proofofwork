@@ -1,20 +1,21 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { ipfsService } from '@/app/lib/services/ipfs';
 
 interface FileUploaderProps {
-  onFileUploaded: (ipfsUri: string, httpUrl: string, file: File) => void;
+  onFileUploaded: (file: File, dataUrl: string) => void;
   onError?: (error: Error) => void;
   accept?: string;
   multiple?: boolean;
   className?: string;
   buttonText?: string;
   loadingText?: string;
+  maxSizeMB?: number;
 }
 
 /**
- * A reusable file uploader component that uploads files to IPFS
+ * A reusable file uploader component that handles local file storage
+ * Files are converted to data URLs and stored locally until the resume is saved
  */
 export default function FileUploader({
   onFileUploaded,
@@ -23,38 +24,77 @@ export default function FileUploader({
   multiple = false,
   className = '',
   buttonText = 'Upload File',
-  loadingText = 'Uploading...'
+  loadingText = 'Processing...',
+  maxSizeMB = 5
 }: FileUploaderProps) {
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateFile = (file: File): string | null => {
+    // Check file size
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      return `File size must be less than ${maxSizeMB}MB`;
+    }
+
+    // Check file type if accept is specified
+    if (accept !== '*/*') {
+      const acceptedTypes = accept.split(',').map(type => type.trim());
+      const fileType = file.type;
+      const fileExtension = `.${file.name.split('.').pop()?.toLowerCase()}`;
+      
+      const isAccepted = acceptedTypes.some(type => {
+        if (type.startsWith('.')) {
+          return fileExtension === type.toLowerCase();
+        }
+        return fileType.startsWith(type.replace('*', ''));
+      });
+
+      if (!isAccepted) {
+        const supportedTypes = acceptedTypes
+          .map(type => type.replace('.', '').toUpperCase())
+          .join(', ');
+        return `File type not supported. Please upload a ${supportedTypes} file.`;
+      }
+    }
+
+    return null;
+  };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsUploading(true);
+    setIsProcessing(true);
 
     try {
-      // Process each file - we'll upload them one by one for now
+      // Process each file
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        // Upload the file to IPFS
-        const ipfsUri = await ipfsService.uploadFile(file);
+        // Validate file
+        const validationError = validateFile(file);
+        if (validationError) {
+          throw new Error(validationError);
+        }
+
+        // Convert file to data URL
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+        });
         
-        // Get the HTTP URL for display/retrieval
-        const httpUrl = ipfsService.getHttpUrl(ipfsUri);
-        
-        // Notify the parent component
-        onFileUploaded(ipfsUri, httpUrl, file);
+        // Notify the parent component with both the original file and data URL
+        onFileUploaded(file, dataUrl);
       }
     } catch (error: any) {
-      console.error('Error uploading file to IPFS:', error);
+      console.error('Error processing file:', error);
       if (onError) {
         onError(error instanceof Error ? error : new Error(error?.message || 'Unknown error'));
       }
     } finally {
-      setIsUploading(false);
+      setIsProcessing(false);
       
       // Reset the file input
       if (fileInputRef.current) {
@@ -82,10 +122,10 @@ export default function FileUploader({
       <button
         type="button"
         onClick={triggerFileInput}
-        disabled={isUploading}
+        disabled={isProcessing}
         className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isUploading ? loadingText : buttonText}
+        {isProcessing ? loadingText : buttonText}
       </button>
     </div>
   );

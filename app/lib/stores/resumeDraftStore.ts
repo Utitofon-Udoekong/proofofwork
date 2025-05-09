@@ -1,68 +1,75 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { EntryType, ProfileMetadata } from '../types';
+import { ResumeMetadata, ResumeEntry, ProfileMetadata } from '../types';
 
-export type ResumeDraftEntryType = {
-  id?: string; // Auto-generated when saving
-  type: EntryType;
-  title: string;
-  company: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  organization: string;
-  [key: string]: any; // Additional fields
+// Define a DraftResumeEntry for use in drafts (attachments are DraftAttachment[])
+export type DraftResumeEntry = Omit<ResumeEntry, 'attachments'> & { attachments?: DraftAttachment[] };
+
+// The draft is now just ResumeMetadata plus a few UI fields
+export type ResumeDraft = Omit<ResumeMetadata, 'entries'> & {
+  entries: DraftResumeEntry[];
+  tokenId?: string; // If associated with an existing resume
+  activeEntryIndex: number | null;
+  // Optionally, add UI-only fields here
 };
 
-export type ResumeDraft = {
-  tokenId?: string; // If associated with an existing resume
-  lastUpdated: string;
-  entries: ResumeDraftEntryType[];
-  activeEntryIndex: number | null;
-  name?: string;
-  attachments?: { ipfsUri: string; httpUrl: string; name: string; type: string }[];
-  profileData?: Partial<ProfileMetadata>; // Profile information
+// Update ResumeEntry type for drafts (for clarity in this file)
+export type DraftAttachment = {
+  name: string;
+  type: string;
+  data: string; // data URL or blob URL
 };
 
 export type ResumeDraftsState = {
   drafts: Record<string, ResumeDraft>;
   currentDraftId: string | null;
   // Actions
-  createDraft: (tokenId?: string, name?: string) => string;
+  createDraft: (tokenId?: string, name?: string, initialDraft?: Partial<ResumeDraft>) => string;
   updateDraft: (draftId: string, updates: Partial<ResumeDraft>) => void;
   setCurrentDraft: (draftId: string | null) => void;
-  addEntry: (draftId: string, entry: ResumeDraftEntryType) => void;
-  updateEntry: (draftId: string, entryIndex: number, updates: Partial<ResumeDraftEntryType>) => void;
+  addEntry: (draftId: string, entry: DraftResumeEntry) => void;
+  updateEntry: (draftId: string, entryIndex: number, updates: Partial<DraftResumeEntry>) => void;
   removeEntry: (draftId: string, entryIndex: number) => void;
   setActiveEntry: (draftId: string, entryIndex: number | null) => void;
   deleteDraft: (draftId: string) => void;
-  addAttachment: (draftId: string, attachment: { ipfsUri: string; httpUrl: string; name: string; type: string }) => void;
-  removeAttachment: (draftId: string, ipfsUri: string) => void;
   clearAllDrafts: () => void;
+  serializeDraftForIPFS: (draftId: string) => ResumeMetadata | null;
+  // Attachment methods
+  addAttachment: (draftId: string, entryIndex: number, attachment: DraftAttachment) => void;
+  removeAttachment: (draftId: string, entryIndex: number, attachmentName: string) => void;
+  // Helper to upload all attachments at mint time
+  processAttachmentsForMint: (draftId: string) => Promise<ResumeMetadata | null>;
 };
 
-// Helper to generate unique IDs
 const generateId = () => `draft_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-// Create the store with persistence
 export const useResumeDraftStore = create<ResumeDraftsState>()(
   persist(
     (set, get) => ({
       drafts: {},
       currentDraftId: null,
 
-      createDraft: (tokenId, name) => {
+      createDraft: (tokenId, name, initialDraft) => {
         const draftId = generateId();
+        const now = new Date().toISOString();
         set((state) => ({
           drafts: {
             ...state.drafts,
             [draftId]: {
-              tokenId,
               name: name || `Draft Resume ${Object.keys(state.drafts).length + 1}`,
-              lastUpdated: new Date().toISOString(),
-              entries: [],
+              version: (initialDraft && initialDraft.version) || '1.0',
+              profile: initialDraft?.profile || {
+                name: name || `Draft Resume ${Object.keys(state.drafts).length + 1}`,
+                lastUpdated: now,
+              },
+              entries: initialDraft?.entries || [],
+              chainId: initialDraft?.chainId,
+              createdAt: now,
+              updatedAt: now,
+              tokenId: tokenId,
               activeEntryIndex: null,
-              attachments: []
+              // Add any other fields from initialDraft
+              ...initialDraft,
             }
           },
           currentDraftId: draftId
@@ -74,14 +81,24 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
         set((state) => {
           const draft = state.drafts[draftId];
           if (!draft) return state;
-
+          const now = new Date().toISOString();
           return {
             drafts: {
               ...state.drafts,
               [draftId]: {
                 ...draft,
                 ...updates,
-                lastUpdated: new Date().toISOString()
+                updatedAt: now,
+                profile: {
+                  ...draft.profile,
+                  ...(updates.profile || {}),
+                  lastUpdated: (updates.profile && updates.profile.lastUpdated) || (draft.profile && draft.profile.lastUpdated) || now,
+                },
+                entries: Array.isArray(updates.entries)
+                  ? updates.entries.map(e => ({ ...e, attachments: Array.isArray(e.attachments) ? e.attachments : [] }))
+                  : Array.isArray(draft.entries)
+                    ? draft.entries.map(e => ({ ...e, attachments: Array.isArray(e.attachments) ? e.attachments : [] }))
+                    : [],
               }
             }
           };
@@ -96,20 +113,22 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
         set((state) => {
           const draft = state.drafts[draftId];
           if (!draft) return state;
-
-          const newEntry = {
-            ...entry,
-            id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-          };
-
+          const entries = Array.isArray(draft.entries) ? draft.entries : [];
+          // Ensure attachments is always DraftAttachment[]
+          let attachments: DraftAttachment[] = [];
+          if (Array.isArray(entry.attachments) && entry.attachments.length > 0 && entry.attachments.every(att => typeof att === 'object' && 'data' in att)) {
+            attachments = entry.attachments as DraftAttachment[];
+          } else {
+            attachments = [];
+          }
           return {
             drafts: {
               ...state.drafts,
               [draftId]: {
                 ...draft,
-                entries: [...draft.entries, newEntry],
-                activeEntryIndex: draft.entries.length,
-                lastUpdated: new Date().toISOString()
+                entries: [...entries, { ...entry, attachments }],
+                activeEntryIndex: entries.length,
+                updatedAt: new Date().toISOString(),
               }
             }
           };
@@ -119,21 +138,28 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       updateEntry: (draftId, entryIndex, updates) => {
         set((state) => {
           const draft = state.drafts[draftId];
-          if (!draft || entryIndex < 0 || entryIndex >= draft.entries.length) return state;
-
-          const updatedEntries = [...draft.entries];
+          const entries = Array.isArray(draft?.entries) ? draft.entries : [];
+          if (!draft || entryIndex < 0 || entryIndex >= entries.length) return state;
+          const updatedEntries = [...entries];
+          // Ensure attachments is always DraftAttachment[]
+          let attachments: DraftAttachment[] = updatedEntries[entryIndex].attachments || [];
+          if (Array.isArray(updates.attachments) && updates.attachments.length > 0 && updates.attachments.every(att => typeof att === 'object' && 'data' in att)) {
+            attachments = updates.attachments as DraftAttachment[];
+          } else {
+            attachments = [];
+          }
           updatedEntries[entryIndex] = {
             ...updatedEntries[entryIndex],
-            ...updates
+            ...updates,
+            attachments
           };
-
           return {
             drafts: {
               ...state.drafts,
               [draftId]: {
                 ...draft,
                 entries: updatedEntries,
-                lastUpdated: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
               }
             }
           };
@@ -143,10 +169,9 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       removeEntry: (draftId, entryIndex) => {
         set((state) => {
           const draft = state.drafts[draftId];
-          if (!draft || entryIndex < 0 || entryIndex >= draft.entries.length) return state;
-
-          const updatedEntries = draft.entries.filter((_, i) => i !== entryIndex);
-          
+          const entries = Array.isArray(draft?.entries) ? draft.entries : [];
+          if (!draft || entryIndex < 0 || entryIndex >= entries.length) return state;
+          const updatedEntries = entries.filter((_, i) => i !== entryIndex);
           return {
             drafts: {
               ...state.drafts,
@@ -154,7 +179,7 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
                 ...draft,
                 entries: updatedEntries,
                 activeEntryIndex: null,
-                lastUpdated: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
               }
             }
           };
@@ -165,7 +190,6 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
         set((state) => {
           const draft = state.drafts[draftId];
           if (!draft) return state;
-
           return {
             drafts: {
               ...state.drafts,
@@ -181,7 +205,6 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       deleteDraft: (draftId) => {
         set((state) => {
           const { [draftId]: _, ...remainingDrafts } = state.drafts;
-          
           return {
             drafts: remainingDrafts,
             currentDraftId: state.currentDraftId === draftId ? null : state.currentDraftId
@@ -189,53 +212,121 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
         });
       },
 
-      addAttachment: (draftId, attachment) => {
-        set((state) => {
-          const draft = state.drafts[draftId];
-          if (!draft) return state;
-
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftId]: {
-                ...draft,
-                attachments: [...(draft.attachments || []), attachment],
-                lastUpdated: new Date().toISOString()
-              }
-            }
-          };
-        });
-      },
-
-      removeAttachment: (draftId, ipfsUri) => {
-        set((state) => {
-          const draft = state.drafts[draftId];
-          if (!draft || !draft.attachments) return state;
-
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftId]: {
-                ...draft,
-                attachments: draft.attachments.filter(att => att.ipfsUri !== ipfsUri),
-                lastUpdated: new Date().toISOString()
-              }
-            }
-          };
-        });
-      },
-
       clearAllDrafts: () => {
-        set({ drafts: {}, currentDraftId: null });
-      }
+        set(() => ({ drafts: {}, currentDraftId: null }));
+      },
+
+      // Attachment methods
+      addAttachment: (draftId, entryIndex, attachment) => {
+        set((state) => {
+          const draft = state.drafts[draftId];
+          const entries = Array.isArray(draft?.entries) ? draft.entries : [];
+          if (!draft || entryIndex < 0 || entryIndex >= entries.length) return state;
+          const updatedEntries = [...entries];
+          const currentEntry = updatedEntries[entryIndex];
+          const currentAttachments: DraftAttachment[] = Array.isArray(currentEntry.attachments) && currentEntry.attachments.length > 0 && typeof currentEntry.attachments[0] === 'object' && 'data' in currentEntry.attachments[0]
+            ? currentEntry.attachments as DraftAttachment[]
+            : [];
+          updatedEntries[entryIndex] = {
+            ...currentEntry,
+            attachments: [...currentAttachments, attachment]
+          };
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                entries: updatedEntries,
+                updatedAt: new Date().toISOString(),
+              }
+            }
+          };
+        });
+      },
+
+      removeAttachment: (draftId, entryIndex, attachmentName) => {
+        set((state) => {
+          const draft = state.drafts[draftId];
+          const entries = Array.isArray(draft?.entries) ? draft.entries : [];
+          if (!draft || entryIndex < 0 || entryIndex >= entries.length) return state;
+          const updatedEntries = [...entries];
+          const currentEntry = updatedEntries[entryIndex];
+          const currentAttachments: DraftAttachment[] = Array.isArray(currentEntry.attachments) && currentEntry.attachments.length > 0 && typeof currentEntry.attachments[0] === 'object' && 'data' in currentEntry.attachments[0]
+            ? currentEntry.attachments as DraftAttachment[]
+            : [];
+          updatedEntries[entryIndex] = {
+            ...currentEntry,
+            attachments: currentAttachments.filter(att => att.name !== attachmentName)
+          };
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                entries: updatedEntries,
+                updatedAt: new Date().toISOString(),
+              }
+            }
+          };
+        });
+      },
+
+      // Helper to process and upload all attachments at mint time
+      processAttachmentsForMint: async (draftId) => {
+        const draft = get().drafts[draftId];
+        if (!draft) return null;
+        // Prepare new entries array for the final ResumeMetadata (do not mutate draft)
+        const processedEntries: ResumeEntry[] = await Promise.all((draft.entries || []).map(async (entry) => {
+          if (Array.isArray(entry.attachments) && entry.attachments.length > 0) {
+            const ipfsUrls: string[] = [];
+            for (const att of entry.attachments as DraftAttachment[]) {
+              if (typeof att === 'object' && att.data) {
+                const arr = att.data.split(',');
+                const mime = arr[0].match(/:(.*?);/)?.[1] || att.type || 'application/octet-stream';
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while (n--) {
+                  u8arr[n] = bstr.charCodeAt(n);
+                }
+                const file = new File([u8arr], att.name, { type: mime });
+                // Upload to IPFS
+                // @ts-ignore
+                const url = await import('../services/ipfs').then(m => m.ipfsService.uploadFile(file));
+                ipfsUrls.push(url);
+              }
+            }
+            // Return entry with attachments as string[] (for minting only)
+            const { attachments, ...rest } = entry;
+            return { ...rest, attachments: ipfsUrls } as ResumeEntry;
+          } else {
+            // No attachments or already processed
+            const { attachments, ...rest } = entry;
+            return { ...rest, attachments: [] } as ResumeEntry;
+          }
+        }));
+        // Remove UI-only fields from draft
+        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft as any;
+        // Set processed entries (with string[] attachments) for minting only
+        const result: ResumeMetadata = {
+          ...resumeMetadata,
+          entries: processedEntries
+        };
+        return result;
+      },
+
+      // Helper to get the canonical ResumeMetadata for IPFS upload
+      serializeDraftForIPFS: (draftId) => {
+        const draft = get().drafts[draftId];
+        if (!draft) return null;
+        // Remove UI-only fields
+        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft;
+        return resumeMetadata as ResumeMetadata;
+      },
     }),
     {
-      name: 'pow-resume-drafts',
+      name: 'resume-drafts',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ 
-        drafts: state.drafts,
-        currentDraftId: state.currentDraftId 
-      })
     }
   )
 );
@@ -250,22 +341,20 @@ export const useCurrentDraft = () => {
 
 export const useCurrentEntry = () => {
   const draft = useCurrentDraft();
-  
   if (!draft || draft.activeEntryIndex === null) {
     return null;
   }
-  
-  return draft.entries[draft.activeEntryIndex];
+  // Ensure entries is always an array
+  const entries = Array.isArray(draft.entries) ? draft.entries : [];
+  return entries[draft.activeEntryIndex];
 };
 
-// Hook to get all drafts sorted by last updated
+// Hook to get all drafts sorted by last updated (use updatedAt on the draft root)
 export const useSortedDrafts = () => {
   const drafts = useResumeDraftStore(state => state.drafts);
-  
-  // Sort drafts by last updated date
+  // Sort drafts by updatedAt date (always present)
   const sortedDrafts = Object.entries(drafts)
     .map(([id, draft]) => ({ id, ...draft }))
-    .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
-    
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   return sortedDrafts;
 }; 

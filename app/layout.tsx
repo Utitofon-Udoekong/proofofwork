@@ -21,7 +21,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Web3Provider>
           <Navbar />
-          {children}
+        {children}
         </Web3Provider>
       </body>
     </html>

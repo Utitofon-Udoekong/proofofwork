@@ -50,7 +50,7 @@ async function main() {
   console.log(`ResumeNFT deployed to: ${resumeAddress}`);
 
   // Save both contract addresses
-  const addresses = await saveContractAddresses({
+  saveContractAddresses({
     verificationRegistry: registryAddress,
     resumeNFT: resumeAddress,
     networkName,

@@ -9,34 +9,21 @@ import "./VerificationRegistry.sol";
 
 contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     uint256 private _tokenIds;
-
     VerificationRegistry public verificationRegistry;
-
-    uint256 public constant MAX_ENTRIES_PER_RESUME = 100;
-
-    // EntryType enum to match TypeScript interface
-    enum EntryType { WORK, EDUCATION, CERTIFICATION, PROJECT, SKILL, AWARD }
-
-    struct ResumeEntry {
-        EntryType entryType;
-        string title;
-        string description;
-        uint256 startDate;
-        uint256 endDate;
-        string organization;
-        bool verified;
-        // Metadata field for additional type-specific data (stored as JSON)
-        string metadata;
-    }
-
-    mapping(uint256 => ResumeEntry[]) private _resumeEntries;
     mapping(uint256 => bool) private _transferable;
-    mapping(bytes32 => address) public verificationRequests;
+
+    // Optional: Verification struct for entry verification
+    struct Verification {
+        address verifier;
+        uint256 timestamp;
+        string details; // e.g., organization name or notes
+    }
+    // tokenId => entryId => Verification
+    mapping(uint256 => mapping(string => Verification)) public entryVerifications;
 
     event ResumeMinted(address indexed recipient, uint256 tokenId);
-    event ResumeEntryAdded(uint256 indexed tokenId, uint256 entryIndex, EntryType entryType);
-    event VerificationRequested(uint256 indexed tokenId, uint256 indexed entryIndex, string organization);
-    event EntryVerified(uint256 indexed tokenId, uint256 entryIndex);
+    event ResumeUpdated(uint256 indexed tokenId, string newTokenURI);
+    event EntryVerified(uint256 indexed tokenId, string entryId, address verifier, string details);
     event TransferabilityChanged(uint256 indexed tokenId, bool isTransferable);
     event ResumeBurned(uint256 indexed tokenId);
 
@@ -62,52 +49,30 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         return newResumeId;
     }
 
-    function addResumeEntry(
-        uint256 tokenId,
-        uint8 entryTypeValue,
-        string memory title,
-        string memory description,
-        uint256 startDate,
-        uint256 endDate,
-        string memory organization,
-        string memory metadata
-    ) public {
+    // Allow the owner to update the tokenURI (IPFS hash) for their resume
+    function updateResumeURI(uint256 tokenId, string memory newTokenURI) public {
         require(ownerOf(tokenId) == msg.sender, "Not the owner");
-        require(_resumeEntries[tokenId].length < MAX_ENTRIES_PER_RESUME, "Max entries reached");
-        require(entryTypeValue <= uint8(EntryType.AWARD), "Invalid entry type");
+        _setTokenURI(tokenId, newTokenURI);
+        emit ResumeUpdated(tokenId, newTokenURI);
+    }
 
-        EntryType entryType = EntryType(entryTypeValue);
-
-        ResumeEntry memory newEntry = ResumeEntry({
-            entryType: entryType,
-            title: title,
-            description: description,
-            startDate: startDate,
-            endDate: endDate,
-            organization: organization,
-            verified: false,
-            metadata: metadata
+    // Allow a verified organization to verify a specific entry in the resume using entryId
+    function verifyEntry(uint256 tokenId, string memory entryId, string memory details) public onlyVerifiedOrg {
+        entryVerifications[tokenId][entryId] = Verification({
+            verifier: msg.sender,
+            timestamp: block.timestamp,
+            details: details
         });
-
-        _resumeEntries[tokenId].push(newEntry);
-        emit ResumeEntryAdded(tokenId, _resumeEntries[tokenId].length - 1, entryType);
+        emit EntryVerified(tokenId, entryId, msg.sender, details);
     }
 
-    function requestVerification(uint256 tokenId, uint256 entryIndex) public {
-        require(ownerOf(tokenId) == msg.sender, "Not the owner");
-        require(entryIndex < _resumeEntries[tokenId].length, "Invalid entry");
-
-        ResumeEntry memory entry = _resumeEntries[tokenId][entryIndex];
-        bytes32 requestId = keccak256(abi.encodePacked(tokenId, entryIndex, entry.organization));
-        verificationRequests[requestId] = msg.sender;
-
-        emit VerificationRequested(tokenId, entryIndex, entry.organization);
-    }
-
-    function verifyEntry(uint256 tokenId, uint256 entryIndex) public onlyVerifiedOrg {
-        require(entryIndex < _resumeEntries[tokenId].length, "Invalid entry");
-        _resumeEntries[tokenId][entryIndex].verified = true;
-        emit EntryVerified(tokenId, entryIndex);
+    // Get verification details for a specific entry
+    function getEntryVerification(uint256 tokenId, string memory entryId) 
+        public 
+        view 
+        returns (Verification memory) 
+    {
+        return entryVerifications[tokenId][entryId];
     }
 
     function setTransferable(uint256 tokenId, bool transferable_) public onlyOwner {
@@ -118,47 +83,8 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     function burnResume(uint256 tokenId) public {
         require(_isAuthorized(_ownerOf(tokenId), msg.sender, tokenId), "Not owner or approved");
         _burn(tokenId);
-        delete _resumeEntries[tokenId];
         delete _transferable[tokenId];
         emit ResumeBurned(tokenId);
-    }
-
-    function updateEntry(
-        uint256 tokenId,
-        uint256 entryIndex,
-        uint8 entryTypeValue,
-        string memory title,
-        string memory description,
-        uint256 startDate,
-        uint256 endDate,
-        string memory organization,
-        string memory metadata,
-        string memory tokenURI_
-    ) public {
-        require(_isAuthorized(_ownerOf(tokenId), msg.sender, tokenId), "Not owner or approved");
-        require(entryIndex < _resumeEntries[tokenId].length, "Invalid index");
-        require(!_resumeEntries[tokenId][entryIndex].verified, "Cannot update verified entry");
-        require(entryTypeValue <= uint8(EntryType.AWARD), "Invalid entry type");
-
-        EntryType entryType = EntryType(entryTypeValue);
-
-        ResumeEntry memory updatedEntry = ResumeEntry({
-            entryType: entryType,
-            title: title,
-            description: description,
-            startDate: startDate,
-            endDate: endDate,
-            organization: organization,
-            verified: false,
-            metadata: metadata
-        });
-
-        _resumeEntries[tokenId][entryIndex] = updatedEntry;
-        _setTokenURI(tokenId, tokenURI_);
-    }
-
-    function getResumeEntries(uint256 tokenId) public view returns (ResumeEntry[] memory) {
-        return _resumeEntries[tokenId];
     }
 
     function isTransferable(uint256 tokenId) public view returns (bool) {
@@ -167,30 +93,6 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
 
     function getTokenURI(uint256 tokenId) public view returns (string memory) {
         return tokenURI(tokenId);
-    }
-
-    function getEntryDetails(uint256 tokenId, uint256 entryIndex)
-        public
-        view
-        returns (ResumeEntry memory, address requestor)
-    {
-        ResumeEntry memory entry = _resumeEntries[tokenId][entryIndex];
-        bytes32 requestId = keccak256(abi.encodePacked(tokenId, entryIndex, entry.organization));
-        return (entry, verificationRequests[requestId]);
-    }
-
-    // For frontend indexing
-    function getEntriesByOwner(address owner) public view returns (uint256[] memory) {
-        uint256 tokenCount = balanceOf(owner);
-        uint256[] memory tokens = new uint256[](tokenCount);
-        for (uint256 i = 0; i < tokenCount; i++) {
-            tokens[i] = tokenOfOwnerByIndex(owner, i);
-        }
-        return tokens;
-    }
-
-    function getTotalEntries() public view returns (uint256) {
-        return _tokenIds;
     }
 
     function updateVerificationRegistry(address newRegistry) public onlyOwner {

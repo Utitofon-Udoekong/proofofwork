@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react";
 import { UserButton, useUser } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
+import { ResumeMetadata } from "@/app/lib/types";
+
+interface ResumeEntry {
+  verified: boolean;
+  // Add other properties as needed
+}
 
 export default function ProfilePage() {
   // Use our combined Web3Provider
@@ -10,8 +16,9 @@ export default function ProfilePage() {
     userAuthenticated, 
     walletConnected, 
     address, 
-    balance, 
-    getResumeEntries
+    balance,
+    tokenIds,
+    resumeNames
   } = useWeb3();
   
   // Get user data from Civic Auth
@@ -51,13 +58,14 @@ export default function ProfilePage() {
         // Load stats from blockchain
         if (walletConnected) {
           try {
-            const entries = await getResumeEntries();
+            // Use tokenIds and resumeNames instead of getResumeEntries
+            const entries = tokenIds.map(id => resumeNames[id.toString()]).filter(Boolean) as ResumeMetadata[];
             
             // Update stats based on entries
             setStats({
               totalEntries: entries.length,
-              verifiedEntries: entries.filter(entry => entry.verified).length,
-              pendingVerifications: entries.filter(entry => !entry.verified).length,
+              verifiedEntries: entries.filter((entry: ResumeMetadata) => entry.verified).length,
+              pendingVerifications: entries.filter((entry: ResumeMetadata) => !entry.verified).length,
               profileViews: stats.profileViews // Keep existing view count
             });
           } catch (error) {
@@ -68,7 +76,7 @@ export default function ProfilePage() {
     };
     
     loadUserData();
-  }, [userAuthenticated, walletConnected, getResumeEntries, civicUser.user]);
+  }, [userAuthenticated, walletConnected, tokenIds, resumeNames, civicUser.user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +132,21 @@ export default function ProfilePage() {
                     <p className="text-sm font-mono bg-gray-700 p-2 rounded break-all text-white">
                       {address}
                     </p>
+                    <button
+                      className="mt-2 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                      onClick={() => {
+                        if (address) {
+                          navigator.clipboard.writeText(address);
+                          alert('Wallet address copied to clipboard!');
+                        }
+                      }}
+                      disabled={!address}
+                    >
+                      Copy Wallet Address
+                    </button>
+                    <div className="mt-2 text-xs text-gray-300">
+                      Fund your wallet with <span className="font-semibold text-green-400">USDC</span> on Sepolia to pay for gas and mint your resume NFT.
+                    </div>
                   </div>
                   
                   <div className="mb-4">

@@ -137,7 +137,7 @@ export default function PublicResumePage({ params }: { params: { address: string
       <div className="min-h-screen bg-white py-12">
         <div className="container mx-auto px-4 text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading resume...</p>
+        <p className="mt-4 text-gray-600">Loading resume...</p>
         </div>
       </div>
     );
@@ -146,15 +146,15 @@ export default function PublicResumePage({ params }: { params: { address: string
   if (error) {
     return (
       <div className="min-h-screen bg-white py-12">
-        <div className="container mx-auto px-4 py-16 max-w-3xl mx-auto">
+      <div className="container mx-auto px-4 py-16 max-w-3xl mx-auto">
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <strong className="font-bold">Error: </strong>
-            <span className="block sm:inline">{error}</span>
-          </div>
-          <div className="mt-8 text-center">
-            <Link href="/" className="text-blue-600 hover:underline">
-              Return to Homepage
-            </Link>
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+        </div>
+        <div className="mt-8 text-center">
+          <Link href="/" className="text-blue-600 hover:underline">
+            Return to Homepage
+          </Link>
           </div>
         </div>
       </div>
@@ -176,9 +176,9 @@ export default function PublicResumePage({ params }: { params: { address: string
                     {skill}
                   </span>
                 ))}
-              </div>
             </div>
-            
+          </div>
+          
             <div className="flex flex-col items-end">
               <div className="bg-white/20 backdrop-blur-sm px-4 py-3 rounded-lg inline-flex items-center">
                 <span className="text-sm font-mono mr-2 truncate max-w-[120px] md:max-w-full">
@@ -196,18 +196,18 @@ export default function PublicResumePage({ params }: { params: { address: string
                   Blockchain Verified Resume
                 </span>
               </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
+        
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Resume Content */}
-        {entryTypeOrder.map(type => {
-          const entries = entriesByType[type];
-          if (!entries || entries.length === 0) return null;
-          
-          return (
+          {entryTypeOrder.map(type => {
+            const entries = entriesByType[type];
+            if (!entries || entries.length === 0) return null;
+            
+            return (
             <div key={type} className="mb-12 last:mb-0">
               <h2 className="text-2xl font-bold text-gray-800 pb-2 border-b border-gray-200 mb-6">
                 {type === 'work' ? 'Work Experience' : 
@@ -217,9 +217,9 @@ export default function PublicResumePage({ params }: { params: { address: string
                  type === 'skill' ? 'Skills' : 
                  type === 'award' ? 'Awards & Honors' : type}
               </h2>
-              
-              <div className="space-y-8">
-                {entries.map((entry, index) => (
+                
+                <div className="space-y-8">
+                  {entries.map((entry, index) => (
                   <div key={index} className="flex flex-col md:flex-row gap-6">
                     <div className="md:w-1/4">
                       <div className="text-gray-700 font-medium">
@@ -249,7 +249,7 @@ export default function PublicResumePage({ params }: { params: { address: string
                         <div className="text-gray-600 mt-1">
                           {entry.degree} {entry.fieldOfStudy && `in ${entry.fieldOfStudy}`}
                           {entry.grade && ` · GPA: ${entry.grade}`}
-                        </div>
+                          </div>
                       )}
                       
                       {type === 'certification' && entry.issuedBy && (
@@ -273,24 +273,24 @@ export default function PublicResumePage({ params }: { params: { address: string
                               <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
                             </svg>
                           </a>
-                        </div>
+                      </div>
                       )}
                       
                       <div className="mt-2 text-gray-600">{entry.description}</div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        
-        {/* If no entries */}
-        {Object.keys(entriesByType).length === 0 && (
+            );
+          })}
+          
+          {/* If no entries */}
+          {Object.keys(entriesByType).length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-600">No resume entries found</p>
-          </div>
-        )}
+              <p className="text-gray-600">No resume entries found</p>
+            </div>
+          )}
         
         <div className="mt-12 pt-6 border-t border-gray-200 text-center">
           <p className="text-gray-500 text-sm">

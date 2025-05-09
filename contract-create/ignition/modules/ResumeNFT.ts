@@ -35,14 +35,13 @@ const ResumeNFTModule = buildModule("ResumeNFTModule", (m) => {
   const verificationRegistry = m.contractAt("VerificationRegistry", registryAddress as string);
 
   // Get the deployer's address to use as the initial owner
-  const deployer = m.getAccount(0);
-  
+  const owner = m.getAccount(0);
   // Deploy ResumeNFT with:
   // 1. The VerificationRegistry contract address
-  // 2. The initial owner address (deployer)
+  // 2. The initial owner address (owner)
   const resumeNFT = m.contract("ResumeNFT", [
     verificationRegistry,
-    deployer
+    owner
   ]);
 
   // Return both contracts for use in scripts or other modules
