@@ -4,11 +4,11 @@ import * as path from 'path';
 /**
  * Saves the contract addresses to a JSON file and updates the types.ts file
  * @param addresses - Object containing contract addresses
- * @param addresses.verificationRegistry - Address of VerificationRegistry contract
+ * @param addresses.verificationManager - Address of VerificationManager contract
  * @param addresses.resumeNFT - Address of ResumeNFT contract
  */
 export function saveContractAddresses(addresses: { 
-  verificationRegistry?: string; 
+  verificationManager?: string; 
   resumeNFT?: string;
   networkName?: string;
 }) {

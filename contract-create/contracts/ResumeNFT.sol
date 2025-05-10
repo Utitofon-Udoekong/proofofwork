@@ -5,38 +5,53 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import "./VerificationRegistry.sol";
+import "./VerificationManager.sol";
 
 contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     uint256 private _tokenIds;
-    VerificationRegistry public verificationRegistry;
+    VerificationManager public verificationManager;
     mapping(uint256 => bool) private _transferable;
-
-    // Optional: Verification struct for entry verification
-    struct Verification {
-        address verifier;
-        uint256 timestamp;
-        string details; // e.g., organization name or notes
-    }
-    // tokenId => entryId => Verification
-    mapping(uint256 => mapping(string => Verification)) public entryVerifications;
 
     event ResumeMinted(address indexed recipient, uint256 tokenId);
     event ResumeUpdated(uint256 indexed tokenId, string newTokenURI);
-    event EntryVerified(uint256 indexed tokenId, string entryId, address verifier, string details);
     event TransferabilityChanged(uint256 indexed tokenId, bool isTransferable);
     event ResumeBurned(uint256 indexed tokenId);
 
-    constructor(address _verificationRegistry, address initialOwner)
+    error NotOwner();
+    error TransferDisabled();
+    error InvalidTokenId();
+    error NotAuthorized();
+    error OrganizationNotVerified();
+    error InvalidEntryId();
+
+    constructor(
+        address _verificationManager,
+        address initialOwner
+    )
         ERC721("ResumeNFT", "RNFT")
         Ownable(initialOwner)
     {
-        verificationRegistry = VerificationRegistry(_verificationRegistry);
+        verificationManager = VerificationManager(_verificationManager);
     }
 
-    modifier onlyVerifiedOrg() {
-        require(verificationRegistry.isVerifiedOrganization(msg.sender), "Not authorized");
-        _;
+    // Request verification from an organization
+    function requestVerification(
+        uint256 tokenId,
+        string memory entryId,
+        address organization,
+        string memory details
+    ) external returns (uint256) {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        if (!verificationManager.isVerifiedOrganization(organization)) revert OrganizationNotVerified();
+        if (bytes(entryId).length == 0) revert InvalidEntryId();
+        if (bytes(details).length == 0) revert InvalidEntryId();
+        
+        return verificationManager.createVerificationRequest(
+            tokenId,
+            entryId,
+            organization,
+            details
+        );
     }
 
     function mintResume(address recipient, string memory metadataURI) public returns (uint256) {
@@ -51,28 +66,9 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
 
     // Allow the owner to update the tokenURI (IPFS hash) for their resume
     function updateResumeURI(uint256 tokenId, string memory newTokenURI) public {
-        require(ownerOf(tokenId) == msg.sender, "Not the owner");
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
         _setTokenURI(tokenId, newTokenURI);
         emit ResumeUpdated(tokenId, newTokenURI);
-    }
-
-    // Allow a verified organization to verify a specific entry in the resume using entryId
-    function verifyEntry(uint256 tokenId, string memory entryId, string memory details) public onlyVerifiedOrg {
-        entryVerifications[tokenId][entryId] = Verification({
-            verifier: msg.sender,
-            timestamp: block.timestamp,
-            details: details
-        });
-        emit EntryVerified(tokenId, entryId, msg.sender, details);
-    }
-
-    // Get verification details for a specific entry
-    function getEntryVerification(uint256 tokenId, string memory entryId) 
-        public 
-        view 
-        returns (Verification memory) 
-    {
-        return entryVerifications[tokenId][entryId];
     }
 
     function setTransferable(uint256 tokenId, bool transferable_) public onlyOwner {
@@ -81,7 +77,7 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
     }
 
     function burnResume(uint256 tokenId) public {
-        require(_isAuthorized(_ownerOf(tokenId), msg.sender, tokenId), "Not owner or approved");
+        if (!_isAuthorized(_ownerOf(tokenId), msg.sender, tokenId)) revert NotAuthorized();
         _burn(tokenId);
         delete _transferable[tokenId];
         emit ResumeBurned(tokenId);
@@ -91,12 +87,8 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         return _transferable[tokenId];
     }
 
-    function getTokenURI(uint256 tokenId) public view returns (string memory) {
-        return tokenURI(tokenId);
-    }
-
-    function updateVerificationRegistry(address newRegistry) public onlyOwner {
-        verificationRegistry = VerificationRegistry(newRegistry);
+    function updateVerificationManager(address newManager) public onlyOwner {
+        verificationManager = VerificationManager(newManager);
     }
 
     function _update(address to, uint256 tokenId, address auth)
@@ -107,7 +99,7 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         // If this is a transfer (not a mint or burn) and token is not transferable, revert
         address from = _ownerOf(tokenId);
         if (from != address(0) && to != address(0) && !_transferable[tokenId]) {
-            revert("Soulbound: transfer disabled");
+            revert TransferDisabled();
         }
         return super._update(to, tokenId, auth);
     }

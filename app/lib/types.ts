@@ -59,7 +59,7 @@ export interface VerificationRequest {
 
 // Contract addresses for deployed contracts
 export interface ContractAddresses {
-  verificationRegistry?: string;
+  verificationManager?: string;
   resumeNFT?: string;
   networkName?: string;
   deploymentTimestamp?: string;
@@ -93,6 +93,7 @@ export interface ProfileMetadata {
 
 // Complete resume metadata structure with both profile and entries
 export interface ResumeMetadata {
+  resumeId: string;
   version: string;
   profile: ProfileMetadata;
   entries: ResumeEntry[];
@@ -108,4 +109,5 @@ export interface ResumeMetadata {
     trait_type: string;
     value: string;
   }>;
+  transactionHash?: string;
 } 

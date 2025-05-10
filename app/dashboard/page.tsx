@@ -2,71 +2,76 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ResumeEntry, EntryType } from "@/app/lib/types";
+import { ResumeMetadata, ResumeEntry, EntryType } from "@/app/lib/types";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 import ResumeManager from "@/app/components/resume/ResumeManager";
 import ResumePreview from "@/app/components/resume/ResumePreview";
 import DraftsList from "@/app/components/resume/DraftsList";
 import { useRouter } from "next/navigation";
 import { useSortedDrafts } from "@/app/lib/stores/resumeDraftStore";
+import ResumeList from '@/app/components/ResumeList';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([]);
+  const [resumes, setResumes] = useState<ResumeMetadata[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filteredType, setFilteredType] = useState<EntryType | 'all'>('all');
   const drafts = useSortedDrafts();
   const hasDrafts = drafts.length > 0;
   const { 
     walletConnected, 
     connectWallet, 
-    getResumeEntries, 
-    requestVerification,
+    getResumes, 
     isLoading,
-    tokenId
+    tokenId,
+    address
   } = useWeb3();
+  const [error, setError] = useState<string | null>(null);
+
+  // Get all entries from all resumes
+  const getAllEntries = (): ResumeEntry[] => {
+    return resumes.flatMap(resume => resume.entries);
+  };
 
   useEffect(() => {
-    const fetchEntries = async () => {
+    const fetchResumes = async () => {
       if (walletConnected) {
         try {
           setLoading(true);
-          const entries = await getResumeEntries();
-          setResumeEntries(entries);
+          setError(null);
+          const fetchedResumes = await getResumes();
+          setResumes(fetchedResumes);
         } catch (error) {
-          console.error("Error fetching resume entries:", error);
+          console.error("Error fetching resumes:", error);
+          setError("Failed to fetch resumes. Please try again.");
         } finally {
           setLoading(false);
         }
       } else {
         setLoading(false);
+        setResumes([]);
       }
     };
     
-    fetchEntries();
-  }, [walletConnected, getResumeEntries]);
+    fetchResumes();
+  }, [walletConnected, getResumes]);
 
-  const handleRequestVerification = async (entryId: number | string) => {
-    try {
-      await requestVerification(Number(entryId));
-      alert("Verification requested successfully!");
+  // const handleRequestVerification = async (entryId: number | string) => {
+  //   try {
+  //     await requestVerification(Number(entryId), organizationAddress, details);
+  //     alert("Verification requested successfully!");
       
-      // Refresh entries
-      const entries = await getResumeEntries();
-      setResumeEntries(entries);
-    } catch (error) {
-      console.error("Error requesting verification:", error);
-      alert("Failed to request verification. Please try again.");
-    }
-  };
+  //     // Refresh resumes
+  //     const fetchedResumes = await getResumes();
+  //     setResumes(fetchedResumes);
+  //   } catch (error) {
+  //     console.error("Error requesting verification:", error);
+  //     alert("Failed to request verification. Please try again.");
+  //   }
+  // };
 
-  const handleDeleteEntry = (entryId: number | string) => {
-    // For now, we'll just remove it from the UI
-    // In a full implementation, this would call a contract method
-    if (confirm("Are you sure you want to delete this entry?")) {
-      setResumeEntries(resumeEntries.filter(e => e.id !== entryId));
-    }
-  };
+  // Get all entries and filter them
+  const allEntries = getAllEntries();
+  
 
   // Handler for selecting a draft
   const handleSelectDraft = (draftId: string) => {
@@ -74,7 +79,7 @@ export default function DashboardPage() {
   };
 
   // Helper function to get icon for entry type
-  const getEntryTypeIcon = (type: EntryType) => {
+  const getEntryTypeIcon = (type: string) => {
     switch (type) {
       case 'work':
         return (
@@ -174,7 +179,7 @@ export default function DashboardPage() {
   };
 
   // Get proper names for entry types
-  const getEntryTypeName = (type: EntryType) => {
+  const getEntryTypeName = (type: string) => {
     switch (type) {
       case 'work': return 'Work Experience';
       case 'education': return 'Education';
@@ -185,10 +190,6 @@ export default function DashboardPage() {
       default: return type;
     }
   };
-
-  const filteredEntries = filteredType === 'all' 
-    ? resumeEntries 
-    : resumeEntries.filter(entry => entry.type === filteredType);
 
   if (loading || isLoading) {
     return (
@@ -249,7 +250,7 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-white">Your Resume</h1>
+        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
           <Link 
           href="/dashboard/resume/create" 
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
@@ -265,129 +266,15 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!walletConnected ? (
-        <div className="text-center py-16 bg-gray-800 rounded-lg shadow-md border border-gray-700">
-          <h2 className="text-xl font-medium mb-4 text-white">Connect Your Wallet</h2>
-          <p className="text-gray-300 mb-6">Connect your wallet to view and manage your on-chain resume.</p>
-          <button 
-            onClick={connectWallet}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium"
-          >
-            Connect Wallet
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="md:col-span-2">
-              {/* Resume Manager Component */}
-              <ResumeManager />
+      {/* Resume List */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Your Resumes</h2>
+        <ResumeList 
+          resumes={resumes}
+          isLoading={loading || isLoading}
+          error={error}
+        />
             </div>
-            <div>
-              {/* Resume Preview Component */}
-              <ResumePreview />
-            </div>
-          </div>
-
-          {!tokenId ? (
-            <div className="text-center py-16 bg-gray-800 rounded-lg border border-gray-700">
-              <h2 className="text-xl font-medium mb-4 text-white">No resume selected</h2>
-              <p className="text-gray-300 mb-6">
-                Create a new resume or select an existing one to get started.
-              </p>
-            </div>
-          ) : resumeEntries.length === 0 ? (
-            <div className="text-center py-16 bg-gray-800 rounded-lg border border-gray-700">
-              <h2 className="text-xl font-medium mb-4 text-white">No resume entries yet</h2>
-              <p className="text-gray-300 mb-6">Start building your on-chain resume by adding your first entry.</p>
-              <Link 
-                href="/dashboard/resume/create" 
-                className="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Add Your First Entry
-              </Link>
-            </div>
-          ) : (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-white">Your Entries</h2>
-                <div className="flex items-center space-x-2">
-                  <label htmlFor="filterType" className="text-sm text-gray-300">Filter:</label>
-                  <select
-                    id="filterType"
-                    value={filteredType}
-                    onChange={(e) => setFilteredType(e.target.value as EntryType | 'all')}
-                    className="bg-gray-700 border border-gray-600 text-gray-300 rounded px-2 py-1 text-sm"
-                  >
-                    <option value="all">All Entries</option>
-                    <option value="work">Work</option>
-                    <option value="education">Education</option>
-                    <option value="certification">Certification</option>
-                    <option value="project">Project</option>
-                    <option value="skill">Skill</option>
-                    <option value="award">Award</option>
-                  </select>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="animate-pulse bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700">
-                      <div className="h-4 bg-gray-700 rounded w-3/4 mb-4"></div>
-                      <div className="h-3 bg-gray-700 rounded w-1/2 mb-2"></div>
-                      <div className="h-3 bg-gray-700 rounded w-3/4 mb-4"></div>
-                      <div className="flex space-x-2">
-                        <div className="h-8 bg-gray-700 rounded w-20"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredEntries.map((entry, index) => (
-                    <div key={index} className="bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700 relative">
-                      {entry.verified && (
-                        <div className="absolute top-2 right-2 bg-green-900/60 text-green-300 text-xs px-2 py-1 rounded-full border border-green-700">
-                          Verified ✓
-                        </div>
-                      )}
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-white">{entry.title}</h3>
-                        <p className="text-gray-300">{entry.company}</p>
-                        <p className="text-sm text-gray-400">{entry.startDate} - {entry.endDate}</p>
-                      </div>
-                      <p className="text-sm mb-4 text-gray-300">{entry.description}</p>
-                      
-                      <div className="flex items-center space-x-2 text-sm">
-                        <span className="bg-blue-900/40 text-blue-300 px-2 py-1 rounded border border-blue-800/50">
-                          {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
-                        </span>
-                        {!entry.verified && !entry.verificationRequested && (
-                          <button
-                            onClick={() => handleRequestVerification(index)}
-                            className="bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
-                          >
-                            Request Verification
-                          </button>
-                        )}
-                        {!entry.verified && entry.verificationRequested && (
-                          <span className="bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded border border-yellow-800/50">
-                            Verification Requested
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 } 

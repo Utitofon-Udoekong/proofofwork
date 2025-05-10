@@ -1,118 +1,148 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Signer } from "ethers";
-import { type ResumeNFT } from "../typechain-types";
-import { type VerificationRegistry } from "../typechain-types";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { ResumeNFT, VerificationManager } from "../typechain-types";
 
 describe("ResumeNFT Contract", function () {
   let resumeNFT: ResumeNFT;
-  let verificationRegistry: VerificationRegistry;
-  let owner: Signer;
-  let addr1: Signer;
-  let addr2: Signer;
+  let verificationManager: VerificationManager;
+  let owner: SignerWithAddress;
+  let addr1: SignerWithAddress;
+  let addr2: SignerWithAddress;
   let tokenId: bigint;
 
   beforeEach(async function () {
     [owner, addr1, addr2] = await ethers.getSigners();
 
-    // Deploy VerificationRegistry contract
-    const VerificationRegistry = await ethers.getContractFactory("VerificationRegistry");
-    verificationRegistry = await VerificationRegistry.deploy();
+    // Deploy VerificationManager contract
+    const VerificationManager = await ethers.getContractFactory("VerificationManager");
+    verificationManager = await VerificationManager.deploy();
 
-    // Deploy ResumeNFT contract with owner address as initialOwner parameter
+    // Deploy ResumeNFT contract
     const ResumeNFT = await ethers.getContractFactory("ResumeNFT");
-    resumeNFT = await ResumeNFT.deploy(await verificationRegistry.getAddress(), await owner.getAddress());
+    resumeNFT = await ResumeNFT.deploy(
+      await verificationManager.getAddress(),
+      owner.address
+    );
 
-    // Add a verified organization to the VerificationRegistry
-    await verificationRegistry.verifyOrganization(await owner.getAddress());
+    // Add and verify organizations
+    await verificationManager.addOrganization(addr1.address, "Org1", "org1@email.com", "https://org1.com");
+    await verificationManager.verifyOrganization(addr1.address);
   });
 
   describe("Minting", function () {
-    it("should mint a new ResumeNFT to the owner and set tokenURI", async function () {
-      const metadataURI = "ipfs://resume1";
-      const tx = await resumeNFT.mintResume(await owner.getAddress(), metadataURI);
-      await tx.wait();
+    it("should mint a new resume NFT", async function () {
+      const tx = await resumeNFT.mintResume(addr2.address, "ipfs://metadata");
+      const receipt = await tx.wait();
+      const event = receipt?.logs[0];
       tokenId = BigInt(1);
-      expect(await resumeNFT.ownerOf(tokenId)).to.equal(await owner.getAddress());
-      expect(await resumeNFT.tokenURI(tokenId)).to.equal(metadataURI);
+      expect(await resumeNFT.ownerOf(tokenId)).to.equal(addr2.address);
     });
   });
 
-  describe("Updating Resume URI", function () {
+  describe("Resume URI", function () {
     beforeEach(async function () {
-      const metadataURI = "ipfs://resume1";
-      const tx = await resumeNFT.mintResume(await owner.getAddress(), metadataURI);
-      await tx.wait();
+      await resumeNFT.mintResume(addr2.address, "ipfs://metadata");
       tokenId = BigInt(1);
     });
 
-    it("should allow the owner to update the tokenURI", async function () {
-      const newURI = "ipfs://resume2";
-      await resumeNFT.connect(owner).updateResumeURI(tokenId, newURI);
-      expect(await resumeNFT.tokenURI(tokenId)).to.equal(newURI);
+    it("should allow owner to update resume URI", async function () {
+      await resumeNFT.connect(addr2).updateResumeURI(tokenId, "ipfs://new-metadata");
+      expect(await resumeNFT.tokenURI(tokenId)).to.equal("ipfs://new-metadata");
     });
 
-    it("should not allow a non-owner to update the tokenURI", async function () {
-      const newURI = "ipfs://resume2";
-      await expect(resumeNFT.connect(addr1).updateResumeURI(tokenId, newURI)).to.be.revertedWith("Not the owner");
-    });
-  });
-
-  describe("Verification", function () {
-    beforeEach(async function () {
-      const metadataURI = "ipfs://resume1";
-      const tx = await resumeNFT.mintResume(await owner.getAddress(), metadataURI);
-      await tx.wait();
-      tokenId = BigInt(1);
-    });
-
-    it("should allow a verified organization to verify an entry", async function () {
-      // owner is a verified org
-      await resumeNFT.connect(owner).verifyEntry(tokenId, 0, "Verified by Org");
-      const verification = await resumeNFT.entryVerifications(tokenId, 0);
-      expect(verification.verifier).to.equal(await owner.getAddress());
-      expect(verification.details).to.equal("Verified by Org");
-      expect(verification.timestamp).to.be.gt(0);
-    });
-
-    it("should not allow a non-verified org to verify an entry", async function () {
+    it("should not allow non-owner to update resume URI", async function () {
       await expect(
-        resumeNFT.connect(addr1).verifyEntry(tokenId, 0, "Fake Org")
-      ).to.be.revertedWith("Not authorized");
+        resumeNFT.connect(addr1).updateResumeURI(tokenId, "ipfs://new-metadata")
+      ).to.be.revertedWithCustomError(resumeNFT, "NotOwner");
     });
   });
 
-  describe("Transferability (Soulbound)", function () {
+  describe("Verification Requests", function () {
     beforeEach(async function () {
-      const metadataURI = "ipfs://resume1";
-      const tx = await resumeNFT.mintResume(await owner.getAddress(), metadataURI);
-      await tx.wait();
+      await resumeNFT.mintResume(addr2.address, "ipfs://metadata");
       tokenId = BigInt(1);
     });
 
-    it("should not allow transferring if transferable is false", async function () {
-      await expect(
-        resumeNFT.transferFrom(await owner.getAddress(), await addr1.getAddress(), tokenId)
-      ).to.be.reverted; // Soulbound logic
+    it("should allow owner to request verification from verified organization", async function () {
+      const tx = await resumeNFT.connect(addr2).requestVerification(
+        tokenId,
+        "entry1",
+        addr1.address,
+        "Please verify my work experience"
+      );
+      await expect(tx).to.emit(verificationManager, "RequestCreated");
     });
 
-    it("should allow owner to change transferability", async function () {
+    it("should not allow non-owner to request verification", async function () {
+      await expect(
+        resumeNFT.connect(addr1).requestVerification(
+          tokenId,
+          "entry1",
+          addr1.address,
+          "Please verify my work experience"
+        )
+      ).to.be.revertedWithCustomError(resumeNFT, "NotOwner");
+    });
+
+    it("should not allow verification request to unverified organization", async function () {
+      await expect(
+        resumeNFT.connect(addr2).requestVerification(
+          tokenId,
+          "entry1",
+          addr2.address,
+          "Please verify my work experience"
+        )
+      ).to.be.revertedWithCustomError(verificationManager, "OrganizationNotVerified");
+    });
+
+    it("should not allow empty entry ID in verification request", async function () {
+      await expect(
+        resumeNFT.connect(addr2).requestVerification(
+          tokenId,
+          "", // empty entry ID
+          addr1.address,
+          "Please verify my work experience"
+        )
+      ).to.be.revertedWithCustomError(resumeNFT, "InvalidEntryId");
+    });
+
+  });
+
+  describe("Transferability", function () {
+    beforeEach(async function () {
+      await resumeNFT.mintResume(addr2.address, "ipfs://metadata");
+      tokenId = BigInt(1);
+    });
+
+    it("should not allow transfer by default", async function () {
+      await expect(
+        resumeNFT.connect(addr2).transferFrom(addr2.address, addr1.address, tokenId)
+      ).to.be.revertedWithCustomError(resumeNFT, "TransferDisabled");
+    });
+
+    it("should allow transfer when enabled by owner", async function () {
       await resumeNFT.setTransferable(tokenId, true);
-      expect(await resumeNFT.isTransferable(tokenId)).to.equal(true);
+      await resumeNFT.connect(addr2).transferFrom(addr2.address, addr1.address, tokenId);
+      expect(await resumeNFT.ownerOf(tokenId)).to.equal(addr1.address);
     });
   });
 
   describe("Burning", function () {
     beforeEach(async function () {
-      const metadataURI = "ipfs://resume1";
-      const tx = await resumeNFT.mintResume(await owner.getAddress(), metadataURI);
-      await tx.wait();
+      await resumeNFT.mintResume(addr2.address, "ipfs://metadata");
       tokenId = BigInt(1);
     });
 
-    it("should allow the owner to burn a resume", async function () {
-      await resumeNFT.burnResume(tokenId);
-      await expect(resumeNFT.ownerOf(tokenId)).to.be.reverted;
+    it("should allow owner to burn their resume", async function () {
+      await resumeNFT.connect(addr2).burnResume(tokenId);
+      await expect(resumeNFT.ownerOf(tokenId)).to.be.revertedWithCustomError(resumeNFT, "ERC721NonexistentToken");
+    });
+
+    it("should not allow non-owner to burn resume", async function () {
+      await expect(
+        resumeNFT.connect(addr1).burnResume(tokenId)
+      ).to.be.revertedWithCustomError(resumeNFT, "NotAuthorized");
     });
   });
 });

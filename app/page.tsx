@@ -4,9 +4,12 @@ import { CivicAuthButton } from '@/app/components/auth/CivicAuthButton';
 import { useUser } from "@civic/auth-web3/react";
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAccount } from 'wagmi';
 
 export default function Home() {
   const { user, authStatus } = useUser();
+  const { isConnected: wagmiConnected } = useAccount();
+  const isConnected = authStatus === 'authenticated' && wagmiConnected;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
@@ -15,15 +18,35 @@ export default function Home() {
           <h1 className="text-5xl font-bold text-white tracking-tight">
             ProofOfWork - On-Chain Resume Builder
           </h1>
-          
+
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Build and verify your professional history on the blockchain with immutable, 
+            Build and verify your professional history on the blockchain with immutable,
             trusted credentials that employers can verify
           </p>
         </div>
 
         <div className="mt-10 space-y-6">
-          {authStatus !== 'authenticated' ? (
+          {isConnected ? (
+            <div className="space-y-6">
+              <p className="text-lg text-gray-300 font-medium">
+                Welcome back! Access your dashboard to manage your resume.
+              </p>
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Go to Dashboard
+                </Link>
+                <Link
+                  href="/dashboard/resume/create"
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Create Resume
+                </Link>
+              </div>
+            </div>
+          ) : (
             <>
               <p className="text-lg text-gray-300 font-medium">
                 Sign in to create your verifiable on-chain resume
@@ -32,26 +55,6 @@ export default function Home() {
                 <CivicAuthButton />
               </div>
             </>
-          ) : (
-            <div className="space-y-6">
-              <p className="text-lg text-gray-300 font-medium">
-                Welcome back! Access your dashboard to manage your resume.
-              </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-4">
-                <Link 
-                  href="/dashboard" 
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  Go to Dashboard
-                </Link>
-                <Link 
-                  href="/dashboard/resume/create" 
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  Create Resume
-                </Link>
-              </div>
-            </div>
           )}
         </div>
 
@@ -65,7 +68,7 @@ export default function Home() {
             <h3 className="font-bold text-xl mb-3 text-white">Create Resume</h3>
             <p className="text-gray-300 text-center">Build your professional profile with verifiable entries</p>
           </div>
-          
+
           <div className="p-8 bg-gray-800 rounded-xl shadow-md transition-all duration-300 hover:shadow-green-900/30 hover:shadow-lg border border-gray-700 flex flex-col items-center">
             <div className="rounded-full bg-green-900/30 p-4 mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +78,7 @@ export default function Home() {
             <h3 className="font-bold text-xl mb-3 text-white">Verify Credentials</h3>
             <p className="text-gray-300 text-center">Get your achievements verified by organizations</p>
           </div>
-          
+
           <div className="p-8 bg-gray-800 rounded-xl shadow-md transition-all duration-300 hover:shadow-purple-900/30 hover:shadow-lg border border-gray-700 flex flex-col items-center">
             <div className="rounded-full bg-purple-900/30 p-4 mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -86,7 +89,7 @@ export default function Home() {
             <p className="text-gray-300 text-center">Share your verified resume with potential employers</p>
           </div>
         </div>
-        
+
         <div className="mt-16 py-6 border-t border-gray-700 text-gray-400 text-sm">
           <p>Secure, decentralized, and tamper-proof professional credentials on the blockchain</p>
         </div>

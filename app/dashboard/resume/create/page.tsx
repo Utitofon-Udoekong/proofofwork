@@ -8,6 +8,7 @@ import { EntryType, EntryTypeEnum, ProfileMetadata, ResumeEntry, ResumeMetadata 
 import FileUploader from '@/app/components/ui/FileUploader';
 import { useFormAutoSave } from '@/app/lib/hooks/useAutoSave';
 import { IPFSService } from '@/app/lib/services/ipfs';
+import Link from 'next/link';
 
 // Get IPFS service singleton
 const ipfsService = IPFSService.getInstance();
@@ -87,10 +88,11 @@ export default function CreateResumePage() {
 
   // State for the resume form
   const [resumeName, setResumeName] = useState('My Professional Resume');
-  const [currentStep, setCurrentStep] = useState<'edit' | 'preview' | 'saving'>('edit');
+  const [currentStep, setCurrentStep] = useState<'edit' | 'preview' | 'saving' | 'success'>('edit');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [transactionHash, setTransactionHash] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isDraftMode, setIsDraftMode] = useState<boolean>(false);
   const [resumeVersion, setResumeVersion] = useState('1.0');
@@ -740,8 +742,12 @@ export default function CreateResumePage() {
             setSuccessMessage('Resume updated on blockchain!');
           } else {
             console.log("Creating new resume");
-            await createNewResume(resumeName, 'ipfs://bafkreibifbxu6zhjdpwlrykztb2eiqsns74s3p4bmspwoazsbaemj3afie');
-            setSuccessMessage('Resume created and published on blockchain!');
+            const txHash = await createNewResume(resumeName, 'ipfs://bafkreibifbxu6zhjdpwlrykztb2eiqsns74s3p4bmspwoazsbaemj3afie');
+            if (txHash) {
+              // Delete the draft after successful mint
+              useResumeDraftStore.getState().deleteDraft(draftId);
+              setSuccessMessage('Resume created and published on blockchain!');
+            }
           }
            
           router.push('/dashboard');
@@ -1821,6 +1827,48 @@ export default function CreateResumePage() {
               If you cancel the transaction or close this page, your resume will still be saved as a draft.
               You can mint it later from the dashboard.
             </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentStep === 'success') {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
+          <div className="mb-6">
+            <svg className="w-16 h-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">{successMessage}</h2>
+          {transactionHash && (
+            <div className="mb-6">
+              <p className="text-gray-300 mb-2">Transaction Hash:</p>
+              <a
+                href={`https://sepolia.etherscan.io/tx/${transactionHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 break-all"
+              >
+                {transactionHash}
+              </a>
+            </div>
+          )}
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/dashboard"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+            >
+              Go to Dashboard
+            </Link>
+            {/* <Link
+              href={`/dashboard/resume/${draftId}`}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded"
+            >
+              View Resume
+            </Link> */}
           </div>
         </div>
       </div>

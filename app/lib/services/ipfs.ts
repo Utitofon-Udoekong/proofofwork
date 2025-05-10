@@ -131,9 +131,27 @@ export class IPFSService {
     if (ipfsUri.startsWith('data:')) return ipfsUri;
     if (ipfsUri.startsWith('ipfs://')) {
       const cid = ipfsUri.replace('ipfs://', '');
-      return `https://w3s.link/ipfs/${cid}`;
+      return `https://${cid}.ipfs.w3s.link`;
     }
     return ipfsUri;
+  }
+
+  /**
+   * Get resume metadata from IPFS URI
+   * @param ipfsUri - The IPFS URI (ipfs://...)
+   * @returns The resume metadata
+   */
+  public async getResumeMetadata(ipfsUri: string): Promise<ResumeMetadata> {
+    if (!ipfsUri) throw new Error('No IPFS URI provided');
+    
+    const httpUrl = this.getHttpUrl(ipfsUri);
+    const response = await fetch(httpUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch resume metadata: ${response.statusText}`);
+    }
+    
+    const metadata = await response.json();
+    return metadata as ResumeMetadata;
   }
 }
 

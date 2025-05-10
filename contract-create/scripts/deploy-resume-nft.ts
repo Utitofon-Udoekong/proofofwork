@@ -2,11 +2,11 @@ import hre from "hardhat";
 import * as fs from 'fs';
 import * as path from 'path';
 import ResumeNFTModule from "../ignition/modules/ResumeNFT";
-import deployVerificationRegistry from "./deploy-verification-registry";
 import { saveContractAddresses } from "./utils/saveAddresses";
+import deployVerificationManager from "./deploy-verification-manager";
 
 // Helper function to read existing contract addresses
-function readExistingAddresses(): { verificationRegistry?: string, networkName?: string } {
+function readExistingAddresses(): { verificationManager?: string, networkName?: string } {
   try {
     const addressesPath = path.resolve(__dirname, '../deployments/contract-addresses.json');
     if (fs.existsSync(addressesPath)) {
@@ -26,24 +26,27 @@ async function main() {
   
   console.log(`\n=== Deploying ResumeNFT on ${networkName} network ===\n`);
 
-  // Check for existing VerificationRegistry address
+  // Check for existing VerificationManager address
   const existingAddresses = readExistingAddresses();
-  let registryAddress = existingAddresses.verificationRegistry;
-  let verificationRegistry;
+  let managerAddress = existingAddresses.verificationManager;
+  let verificationManager;
 
   // If no registry address is available or we're on a different network, deploy a new one
-  if (!registryAddress || existingAddresses.networkName !== networkName) {
-    console.log('No existing VerificationRegistry found for this network, deploying a new one...');
-    const deployment = await deployVerificationRegistry();
-    registryAddress = deployment.registryAddress;
-    verificationRegistry = deployment.verificationRegistry;
+  if (!managerAddress || existingAddresses.networkName !== networkName) {
+    console.log('No existing VerificationManager found for this network, deploying a new one...');
+    const deployment = await deployVerificationManager();
+    managerAddress = deployment.managerAddress;
+    verificationManager = deployment.verificationManager;
   } else {
-    console.log(`Using existing VerificationRegistry at: ${registryAddress}`);
+    console.log(`Using existing VerificationManager at: ${managerAddress}`);
   }
 
   // Update the ResumeNFT module with the correct registry address
   console.log('Deploying ResumeNFT...');
-  const { resumeNFT } = await hre.ignition.deploy(ResumeNFTModule);
+  const { resumeNFT } = await hre.ignition.deploy(ResumeNFTModule, {
+    // This must be an absolute path to your parameters JSON file
+    parameters: path.resolve(__dirname, "../ignition/parameters.json"),
+  });
   
   // Get the deployed contract address
   const resumeAddress = (resumeNFT as any).address;
@@ -51,13 +54,13 @@ async function main() {
 
   // Save both contract addresses
   saveContractAddresses({
-    verificationRegistry: registryAddress,
+    verificationManager: managerAddress,
     resumeNFT: resumeAddress,
     networkName,
   });
 
   console.log('\nDeployment completed successfully!');
-  return { resumeNFT, verificationRegistry, resumeAddress, registryAddress };
+  return { resumeNFT, verificationManager, resumeAddress, managerAddress };
 }
 
 // Execute only if run directly

@@ -15,8 +15,10 @@ const config: HardhatUserConfig = {
       blockGasLimit: 12000000,
     },
     sepolia: {
-      url: 'https://ethereum-sepolia-rpc.publicnode.com',
-      accounts: [process.env.PRIVATE_KEY as string],
+      // url: 'https://sepolia.etherscan.io',
+      url: 'https://eth-sepolia.g.alchemy.com/v2/XtyTZkjH5q4OZ2AjHCoN5MJ0g5u5E3MV',
+      accounts: [process.env.OWNER_PRIVATE_KEY as string, process.env.USER_PRIVATE_KEY as string, 
+        process.env.ORG_PRIVATE_KEY as string, process.env.OTHERORG_PRIVATE_KEY as string],
     },
   },
   defaultNetwork: "sepolia",
