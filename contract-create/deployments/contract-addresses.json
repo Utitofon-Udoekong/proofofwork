@@ -1,6 +1,6 @@
 {
-  "verificationManager": "0x5278Cf791443b47FD7E19944c8643393Ba4A86d3",
-  "resumeNFT": "0x04e58d6aD1f578D7A676399a9f677C77c831Cc2E",
+  "verificationManager": "0xBF0d0Ab3997371bF64BEad012A4d52166bAec546",
+  "resumeNFT": "0x234971D28918B37d4c53eE1b7163D0Bc32B445ff",
   "networkName": "sepolia",
-  "deploymentTimestamp": "2025-05-09T20:45:39.438Z"
+  "deploymentTimestamp": "2025-05-10T21:56:49.314Z"
 }

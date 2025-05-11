@@ -99,8 +99,8 @@ export default function DashboardLayout({
                   href="/dashboard"
                   className={`$${
                     pathname === "/dashboard"
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                      ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
                   } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
                 >
                   My Resumes
@@ -109,8 +109,8 @@ export default function DashboardLayout({
                   href="/dashboard/resume/create"
                   className={`$${
                     pathname === "/dashboard/resume/create"
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                      ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
                   } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
                 >
                   Create Resume
@@ -119,8 +119,8 @@ export default function DashboardLayout({
                   href="/dashboard/verification-requests"
                   className={`$${
                     pathname === "/dashboard/verification-requests"
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                      ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
                   } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
                 >
                   Verification Requests
@@ -131,19 +131,25 @@ export default function DashboardLayout({
             {/* Divider */}
             <div className="border-t border-gray-700 my-6" />
 
-            {/* Profile */}
-            <nav className="space-y-1 mt-2">
-              <Link
-                href="/dashboard/organizations"
-                className={`$${
-                  pathname === "/dashboard/organizations"
-                    ? "bg-gray-700 text-white"
-                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
-                } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
-              >
+            {/* Organizations Section with Sub-links */}
+            <div className="mt-8">
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Organizations
-              </Link>
-            </nav>
+              </div>
+              <nav className="space-y-1 ml-2">
+                <Link
+                  href="/dashboard/organizations"
+                  className={`$${
+                    pathname === "/dashboard/organizations"
+                      ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                      : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
+                  } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
+                >
+                  Organizations
+                </Link>
+              </nav>
+            </div>
+
             {/* Divider */}
             <div className="border-t border-gray-700 my-6" />
 
@@ -153,11 +159,21 @@ export default function DashboardLayout({
                 href="/dashboard/profile"
                 className={`$${
                   pathname === "/dashboard/profile"
-                    ? "bg-gray-700 text-white"
-                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                    ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                    : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
                 } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
               >
                 Profile
+              </Link>
+              <Link
+                href="/dashboard/admin"
+                className={`$${
+                  pathname === "/dashboard/admin"
+                    ? "bg-gray-700 text-white font-bold border-l-4 border-blue-500"
+                    : "text-gray-400 hover:bg-gray-700 hover:text-white border-l-4 border-transparent"
+                } group flex items-center px-3 py-2 text-sm font-medium rounded-md`}
+              >
+                Admin
               </Link>
             </nav>
           </div>
