@@ -5,11 +5,6 @@ import { UserButton, useUser } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 import { ResumeMetadata } from "@/app/lib/types";
 
-interface ResumeEntry {
-  verified: boolean;
-  // Add other properties as needed
-}
-
 export default function ProfilePage() {
   // Use our combined Web3Provider
   const { 
@@ -18,9 +13,9 @@ export default function ProfilePage() {
     address, 
     balance,
     tokenIds,
-    resumeNames
+    getResumes
   } = useWeb3();
-  
+  console.log("tokenIds", tokenIds);
   // Get user data from Civic Auth
   const civicUser = useUser();
   
@@ -33,14 +28,9 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
-  // Resume stats
-  const [stats, setStats] = useState({
-    totalEntries: 0,
-    verifiedEntries: 0, 
-    pendingVerifications: 0,
-    profileViews: 0
-  });
-
+  // Add state for selected resume
+  const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null);
+  const [resumes, setResumes] = useState<ResumeMetadata[]>([]);
   // Load user data
   useEffect(() => {
     const loadUserData = async () => {
@@ -58,16 +48,13 @@ export default function ProfilePage() {
         // Load stats from blockchain
         if (walletConnected) {
           try {
-            // Use tokenIds and resumeNames instead of getResumeEntries
-            const entries = tokenIds.map(id => resumeNames[id.toString()]).filter(Boolean) as ResumeMetadata[];
+            const resumes = await getResumes();
+            setResumes(resumes);
+            // Set initial selected resume if available
+            if (resumes.length > 0 && !selectedResumeId) {
+              setSelectedResumeId(resumes[0].tokenId || null);
+            }
             
-            // Update stats based on entries
-            setStats({
-              totalEntries: entries.length,
-              verifiedEntries: entries.filter((entry: ResumeMetadata) => entry.verified).length,
-              pendingVerifications: entries.filter((entry: ResumeMetadata) => !entry.verified).length,
-              profileViews: stats.profileViews // Keep existing view count
-            });
           } catch (error) {
             console.error("Error loading resume stats:", error);
           }
@@ -76,7 +63,7 @@ export default function ProfilePage() {
     };
     
     loadUserData();
-  }, [userAuthenticated, walletConnected, tokenIds, resumeNames, civicUser.user]);
+  }, [userAuthenticated, walletConnected, tokenIds, civicUser.user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +132,7 @@ export default function ProfilePage() {
                       Copy Wallet Address
                     </button>
                     <div className="mt-2 text-xs text-gray-300">
-                      Fund your wallet with <span className="font-semibold text-green-400">USDC</span> on Sepolia to pay for gas and mint your resume NFT.
+                      Fund your wallet with <span className="font-semibold text-green-400">ETH</span> on Sepolia to pay for gas and mint your resume NFT.
                     </div>
                   </div>
                   
@@ -176,50 +163,50 @@ export default function ProfilePage() {
             </div>
             
             <div className="bg-gray-800 p-6 rounded-lg shadow-md border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-white">Resume Stats</h2>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Total Entries</span>
-                  <span className="font-medium text-white">{stats.totalEntries}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Verified Entries</span>
-                  <span className="font-medium text-white">{stats.verifiedEntries}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Pending Verifications</span>
-                  <span className="font-medium text-white">{stats.pendingVerifications}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Profile Views</span>
-                  <span className="font-medium text-white">{stats.profileViews}</span>
-                </div>
-              </div>
               
-              <div className="mt-6 pt-6 border-t border-gray-600">
+              <div className="">
                 <h3 className="text-md font-medium mb-3 text-white">Public Resume Link</h3>
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    readOnly
-                    value={address ? `proof-of-work.xyz/dashboard/resume/${address.slice(0, 10)}...` : "Wallet connecting..."}
-                    className="flex-1 text-sm bg-gray-700 p-2 rounded-l text-white"
-                  />
-                  <button
-                    onClick={() => {
-                      if (address) {
-                        navigator.clipboard.writeText(`https://proof-of-work.xyz/dashboard/resume/${address}`);
-                        alert("Link copied to clipboard!");
-                      }
-                    }}
-                    disabled={!address}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-r disabled:bg-gray-600"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
-                      <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
-                    </svg>
-                  </button>
+                <div className="flex flex-col space-y-2">
+                  {tokenIds.length > 0 ? (
+                    <>
+                      <select
+                        value={selectedResumeId || ''}
+                        onChange={(e) => setSelectedResumeId(e.target.value)}
+                        className="w-full bg-gray-700 text-white p-2 rounded mb-2"
+                      >
+                        {tokenIds.map((id) => (
+                          <option key={id.toString()} value={id.toString()}>
+                            {resumes.find(resume => resume.tokenId === id.toString())?.name || `Resume #${id}`}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex items-center">
+                        <input
+                          type="text"
+                          readOnly
+                          value={selectedResumeId ? `${window.location.origin}/resume/${selectedResumeId}` : "No resume selected"}
+                          className="flex-1 text-sm bg-gray-700 p-2 rounded-l text-white"
+                        />
+                        <button
+                          onClick={() => {
+                            if (selectedResumeId) {
+                              navigator.clipboard.writeText(`${window.location.origin}/resume/${selectedResumeId}`);
+                              alert("Link copied to clipboard!");
+                            }
+                          }}
+                          disabled={!selectedResumeId}
+                          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-r disabled:bg-gray-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
+                            <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">No resumes minted yet. Mint a resume to get a public link.</p>
+                  )}
                 </div>
               </div>
             </div>

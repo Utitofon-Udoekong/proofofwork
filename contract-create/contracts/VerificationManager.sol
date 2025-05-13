@@ -150,6 +150,7 @@ contract VerificationManager is Ownable, ReentrancyGuard {
 
     // Request Management
     function createVerificationRequest(
+        address user,
         uint256 resumeId,
         string memory entryId,
         address organization,
@@ -158,6 +159,7 @@ contract VerificationManager is Ownable, ReentrancyGuard {
         if (!organizations[organization].exists) revert OrganizationNotFound();
         if (!organizations[organization].isVerified) revert OrganizationNotVerified();
         if (bytes(entryId).length == 0) revert InvalidEntryId();
+        if (bytes(details).length == 0) revert InvalidEntryId();
 
         // Check for duplicate pending request
         uint256 existingRequestId = resumeEntryRequests[resumeId][entryId];
@@ -171,7 +173,7 @@ contract VerificationManager is Ownable, ReentrancyGuard {
         
         requests[newRequestId] = VerificationRequest({
             id: newRequestId,
-            user: msg.sender,
+            user: user,
             resumeId: resumeId,
             entryId: entryId,
             organization: organization,
@@ -181,13 +183,13 @@ contract VerificationManager is Ownable, ReentrancyGuard {
             verificationDetails: ""
         });
 
-        userRequestCount[msg.sender]++;
+        userRequestCount[user]++;
         orgRequestCount[organization]++;
-        userRequests[msg.sender].push(newRequestId);
+        userRequests[user].push(newRequestId);
         orgRequests[organization].push(newRequestId);
         resumeEntryRequests[resumeId][entryId] = newRequestId;
 
-        emit RequestCreated(newRequestId, msg.sender, organization, resumeId, entryId, details);
+        emit RequestCreated(newRequestId, user, organization, resumeId, entryId, details);
         return newRequestId;
     }
 

@@ -4,70 +4,24 @@ import { useState, useEffect } from "react";
 import { UserButton } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 import { VerificationRequest } from "@/app/lib/types";
+import { useVerificationRequests } from '@/app/hooks/useVerificationRequests';
 
 export default function VerificationRequestsPage() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Use our combined Web3Provider
   const { 
     userAuthenticated, 
     walletConnected, 
     createWallet, 
-    connectWallet, 
-    getResumeEntries,
-    requestVerification,
     isLoading
   } = useWeb3();
   
-  // Verification requests data
-  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
-  
-  useEffect(() => {
-    const fetchResumeEntries = async () => {
-      try {
-        if (!walletConnected) {
-          setLoading(false);
-          return;
-        }
-        
-        setLoading(true);
-        
-        // Get resume entries using our provider
-        const entries = await getResumeEntries();
-        
-        // Generate verification requests based on entries
-        const mockRequests: VerificationRequest[] = [];
-        
-        entries.forEach((entry, index) => {
-          if (entry.organization) {
-            mockRequests.push({
-              entryId: index,
-              organization: entry.organization,
-              status: entry.verified ? 'approved' : 'pending',
-              requestDate: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-              responseDate: entry.verified ? new Date().toISOString() : undefined
-            });
-          }
-        });
-        
-        setVerificationRequests(mockRequests);
-      } catch (error) {
-        console.error("Error fetching resume entries:", error);
-        setError("Failed to load your verification requests. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchResumeEntries();
-  }, [walletConnected, getResumeEntries]);
+  // Use the new hook for verification requests
+  const { data: verificationRequests = [], isLoading: loading, error } = useVerificationRequests();
 
-  const handleCancelRequest = async (requestId: number | string) => {
+  const handleCancelRequest = async (requestId: number) => {
     // In a real implementation, this would call a contract method
     if (confirm("Are you sure you want to cancel this verification request?")) {
       // Mock implementation - just update the UI
-      setVerificationRequests(verificationRequests.filter(req => req.entryId !== requestId));
+      // verificationRequests.filter(req => req.id !== requestId);
     }
   };
 
@@ -75,32 +29,32 @@ export default function VerificationRequestsPage() {
     switch (status) {
       case 'pending':
         return (
-          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900 text-yellow-300">
             Pending
           </span>
         );
       case 'approved':
         return (
-          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900 text-green-300">
             Approved
           </span>
         );
       case 'rejected':
         return (
-          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-900 text-red-300">
             Rejected
           </span>
         );
       default:
         return (
-          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-300">
             {status}
           </span>
         );
     }
   };
 
-  if (loading || isLoading) {
+  if (loading) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
@@ -114,7 +68,7 @@ export default function VerificationRequestsPage() {
       <div className="container mx-auto px-4 py-16 text-center">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
           <strong className="font-bold">Error: </strong>
-          <span className="block sm:inline">{error}</span>
+          <span className="block sm:inline">{error.message}</span>
         </div>
         <button 
           onClick={() => window.location.reload()}
@@ -179,43 +133,41 @@ export default function VerificationRequestsPage() {
           </a>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Entry
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Organization
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Requested Date
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
                 {verificationRequests.map((request) => {
                   return (
-                    <tr key={`${request.entryId}`}>
+                    <tr key={request.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="text-sm font-medium text-gray-900">{request.organization}</div>
-                        </div>
+                        <div className="text-sm font-medium text-gray-100">{request.entryId}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{request.organization}</div>
+                        <div className="text-sm text-gray-100">{request.verificationDetails}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {new Date(request.requestDate).toLocaleDateString()}
+                        <div className="text-sm text-gray-300">
+                          {new Date(request.timestamp * 1000).toLocaleDateString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -224,15 +176,15 @@ export default function VerificationRequestsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {request.status === 'pending' && (
                           <button
-                            onClick={() => handleCancelRequest(request.entryId)}
-                            className="text-red-600 hover:text-red-900"
+                            onClick={() => handleCancelRequest(request.id)}
+                            className="text-red-400 hover:text-red-600"
                           >
                             Cancel
                           </button>
                         )}
                         {request.status === 'approved' && (
-                          <span className="text-green-600">
-                            Verified on {request.responseDate ? new Date(request.responseDate).toLocaleDateString() : 'Unknown date'}
+                          <span className="text-green-400">
+                            Verified on {new Date(request.timestamp * 1000).toLocaleDateString()}
                           </span>
                         )}
                       </td>
@@ -245,13 +197,13 @@ export default function VerificationRequestsPage() {
         </div>
       )}
       
-      <div className="mt-8 bg-blue-50 rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">About Verification</h2>
-        <p className="text-gray-700 mb-4">
+      <div className="mt-8 bg-gray-800 border border-gray-700 rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-100">About Verification</h2>
+        <p className="text-gray-300 mb-4">
           Verification requests are sent to the organizations listed in your resume entries. Once an organization verifies your entry,
           it will be permanently marked as verified on the blockchain.
         </p>
-        <p className="text-gray-700">
+        <p className="text-gray-300">
           Verified entries add credibility to your resume and can be trusted by potential employers or clients.
         </p>
       </div>

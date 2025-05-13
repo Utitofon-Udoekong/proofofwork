@@ -12,7 +12,7 @@ export enum EntryTypeEnum {
 }
 
 export interface ResumeEntry {
-  id: number | string;
+  id: string;
   type: EntryType;
   title: string;
   company: string; // Organization, institution, or issuer
@@ -49,12 +49,18 @@ export interface ResumeEntry {
   dateAwarded?: string;
 }
 
+export type VerificationRequestStatus = "pending" | "approved" | "rejected";
+
 export interface VerificationRequest {
-  entryId: number | string;
+  id: number;
+  user: string;
+  resumeId: number;
   organization: string;
-  status: 'pending' | 'approved' | 'rejected';
-  requestDate: string;
-  responseDate?: string;
+  entryId: string;
+  details: string;
+  status: VerificationRequestStatus;
+  timestamp: number;
+  verificationDetails: string;
 }
 
 // Contract addresses for deployed contracts
@@ -111,3 +117,14 @@ export interface ResumeMetadata {
   }>;
   transactionHash?: string;
 } 
+
+export interface Organization {
+  address: string;
+  name: string;
+  email: string;
+  website: string;
+  isVerified: boolean;
+  verificationTimestamp: number;
+  lastUpdateTimestamp: number;
+  exists: boolean;
+}

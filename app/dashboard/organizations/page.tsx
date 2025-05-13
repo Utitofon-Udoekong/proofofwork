@@ -3,6 +3,7 @@
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { useState, useEffect } from 'react';
 import Link from "next/link";
+import { usePendingVerificationRequests } from '@/app/hooks/usePendingVerificationRequests';
 
 interface OrganizationStatus {
   name: string;
@@ -14,8 +15,85 @@ interface OrganizationStatus {
   exists: boolean;
 }
 
+interface VerificationRequest {
+  id: number;
+  user: string;
+  resumeId: number;
+  entryId: string;
+  details: string;
+  status: 'pending' | 'approved' | 'rejected';
+  timestamp: number;
+  verificationDetails: string;
+}
+
+function RequestActionModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  actionType,
+  loading,
+  hint
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (details: string) => void;
+  actionType: 'approve' | 'reject';
+  loading: boolean;
+  hint: string;
+}) {
+  const [details, setDetails] = useState('');
+
+  // Reset details when modal opens/closes
+  useEffect(() => {
+    if (isOpen) setDetails('');
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-6 border border-gray-700">
+        <h3 className="text-lg font-semibold text-white mb-2">
+          {actionType === 'approve' ? 'Approve Verification Request' : 'Reject Verification Request'}
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">{hint}</p>
+        <textarea
+          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white h-24 mb-4"
+          placeholder={actionType === 'approve' ? 'e.g. Verified employment from Jan 2022 to Dec 2023.' : 'e.g. Insufficient evidence for claimed experience.'}
+          value={details}
+          onChange={e => setDetails(e.target.value)}
+          disabled={loading}
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-300 hover:text-white"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSubmit(details)}
+            disabled={!details.trim() || loading}
+            className={`px-4 py-2 rounded ${!details.trim() || loading ? 'bg-gray-600 text-gray-300 cursor-not-allowed' : actionType === 'approve' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+          >
+            {loading ? (actionType === 'approve' ? 'Approving...' : 'Rejecting...') : (actionType === 'approve' ? 'Approve' : 'Reject')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OrganizationPage() {
-  const { address, getOrganizationDetails, registerOrganization } = useWeb3();
+  const { 
+    address, 
+    getOrganizationDetails, 
+    registerOrganization,
+    approveVerificationRequest,
+    rejectVerificationRequest,
+    isLoading
+  } = useWeb3();
   const [status, setStatus] = useState<OrganizationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +103,13 @@ export default function OrganizationPage() {
     website: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAction, setModalAction] = useState<'approve' | 'reject' | null>(null);
+  const [modalRequestId, setModalRequestId] = useState<number | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  // Use the new hook for pending requests
+  const { data: pendingRequests = [], isLoading: loadingRequests, error: pendingError } = usePendingVerificationRequests();
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -62,12 +147,8 @@ export default function OrganizationPage() {
     try {
       setSubmitting(true);
       setError(null);
-      
-      // Call the contract to register organization
-      // This will be implemented in Web3Provider
       await registerOrganization(formData.name, formData.email, formData.website);
-      
-      // Refresh status
+      // Refresh status after registration
       const details = await getOrganizationDetails(address);
       if (details) {
         setStatus({
@@ -80,199 +161,231 @@ export default function OrganizationPage() {
           exists: details[6],
         });
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register organization');
+    } catch (err: any) {
+      console.error('Error registering organization:', err);
+      setError(err.message || 'Failed to register organization');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!address) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Organizations</h1>
-          <Link
-            href="/dashboard/organizations/create"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          >
-            Create Organization
-          </Link>
-        </div>
-        <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
-          <p className="text-gray-300">Please connect your wallet to continue</p>
-        </div>
-      </div>
-    );
-  }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const openModal = (action: 'approve' | 'reject', requestId: number) => {
+    setModalAction(action);
+    setModalRequestId(requestId);
+    setModalOpen(true);
+  };
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalAction(null);
+    setModalRequestId(null);
+    setModalLoading(false);
+  };
+
+  const handleApproveRequest = (requestId: number) => {
+    openModal('approve', requestId);
+  };
+
+  const handleRejectRequest = (requestId: number) => {
+    openModal('reject', requestId);
+  };
+
+  const handleModalSubmit = async (details: string) => {
+    if (!modalRequestId || !modalAction) return;
+    setModalLoading(true);
+    setError(null);
+    try {
+      if (modalAction === 'approve') {
+        await approveVerificationRequest(modalRequestId, details);
+      } else {
+        await rejectVerificationRequest(modalRequestId, details);
+      }
+      // Refresh pending requests
+      closeModal();
+    } catch (err: any) {
+      setModalLoading(false);
+      console.error('Error handling request:', err);
+      setError(err.message || 'Failed to process request');
+    }
+  };
 
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Organizations</h1>
-          <Link
-            href="/dashboard/organizations/create"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          >
-            Create Organization
-          </Link>
-        </div>
-        <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
-          <div className="flex justify-center my-8">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-          <p className="text-gray-300">Loading organization status...</p>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       </div>
     );
   }
 
-  if (status?.exists) {
+  if (!status?.exists) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Organizations</h1>
-          <Link
-            href="/dashboard/organizations/create"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          >
-            Create Organization
-          </Link>
-        </div>
-        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-          <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-bold text-white mb-4">Organization Status</h2>
-            <div className="flex items-center mb-4">
-              <div className={`w-3 h-3 rounded-full mr-2 ${
-                status.isVerified ? 'bg-green-500' : 'bg-yellow-500'
-              }`}></div>
-              <span className="text-gray-300">
-                {status.isVerified ? 'Verified' : 'Pending Verification'}
-              </span>
+        <h1 className="text-2xl font-bold text-white mb-6">Register Organization</h1>
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-900/30 border border-red-900/50 rounded text-red-300">
+              {error}
             </div>
-            <div className="space-y-4">
-              <div>
-                <p className="text-gray-400">Name</p>
-                <p className="text-white">{status.name}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">Email</p>
-                <p className="text-white">{status.email}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">Website</p>
-                <a 
-                  href={status.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  {status.website}
-                </a>
-              </div>
-              <div>
-                <p className="text-gray-400">Last Updated</p>
-                <p className="text-white">
-                  {new Date(status.lastUpdateTimestamp * 1000).toLocaleString()}
-                </p>
-              </div>
-              {status.isVerified && (
-                <div>
-                  <p className="text-gray-400">Verified On</p>
-                  <p className="text-white">
-                    {new Date(status.verificationTimestamp * 1000).toLocaleString()}
-                  </p>
-                </div>
-              )}
+          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-gray-300 mb-2">Organization Name</label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                placeholder="Enter organization name"
+              />
             </div>
-          </div>
+            <div>
+              <label className="block text-gray-300 mb-2">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                placeholder="Enter organization email"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-2">Website</label>
+              <input
+                type="url"
+                name="website"
+                value={formData.website}
+                onChange={handleInputChange}
+                required
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                placeholder="Enter organization website"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`w-full py-2 px-4 rounded ${
+                submitting
+                  ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {submitting ? 'Registering...' : 'Register Organization'}
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-        <div className="p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white mb-4">Register Organization</h2>
-          <p className="text-gray-300 mb-6">
-            Register your organization to verify work experience claims. Your registration will be reviewed by our team.
-          </p>
-          <div className="bg-blue-900/30 border border-blue-700/50 rounded p-4 mb-6">
-            <p className="text-blue-300 text-sm">
-              <span className="font-semibold">Note:</span> Your connected wallet address ({address}) will be used to identify your organization. 
-              Make sure to use the same wallet for all future verifications.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {error && (
-            <div className="p-4 bg-red-900/30 border border-red-900/50 rounded text-red-300">
-              {error}
-            </div>
+    <div className="mx-auto p-6">
+      <h1 className="text-2xl font-bold text-white mb-6">Organization Dashboard</h1>
+      
+      {/* Organization Status */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mx-auto mb-6">
+        <div className="flex items-center mb-4">
+          <span className={`w-3 h-3 rounded-full mr-2 ${status.isVerified ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+          <span className="text-white font-semibold text-lg">{status.name}</span>
+          {status.isVerified ? (
+            <span className="ml-3 px-2 py-1 text-xs font-semibold rounded bg-green-900 text-green-300">Verified</span>
+          ) : (
+            <span className="ml-3 px-2 py-1 text-xs font-semibold rounded bg-yellow-900 text-yellow-300">Pending</span>
           )}
-
-          <div>
-            <label className="block text-gray-300 mb-2">Organization Name</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-300 mb-2">Email Address</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-300 mb-2">Website</label>
-            <input
-              type="url"
-              value={formData.website}
-              onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-              required
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={submitting}
-              className={`px-4 py-2 rounded ${
-                submitting
-                  ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              {submitting ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Registering...
-                </span>
-              ) : (
-                'Register Organization'
-              )}
-            </button>
-          </div>
-        </form>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <dt className="text-gray-400">Email</dt>
+          <dd className="text-white break-all">{status.email}</dd>
+          <dt className="text-gray-400">Website</dt>
+          <dd>
+            <a href={status.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">
+              {status.website}
+            </a>
+          </dd>
+          <dt className="text-gray-400">Last Updated</dt>
+          <dd className="text-white">{new Date(status.lastUpdateTimestamp * 1000).toLocaleString()}</dd>
+          {status.isVerified && (
+            <>
+              <dt className="text-gray-400">Verified On</dt>
+              <dd className="text-white">{new Date(status.verificationTimestamp * 1000).toLocaleString()}</dd>
+            </>
+          )}
+        </dl>
       </div>
+
+      {/* Pending Verification Requests */}
+      {status.isVerified && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+          <div className="p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Pending Verification Requests</h2>
+            {loadingRequests ? (
+              <div className="flex justify-center items-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            ) : pendingRequests.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No pending verification requests</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Resume ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Entry ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Details</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-300 uppercase">User</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-gray-800 divide-y divide-gray-700">
+                    {pendingRequests.map((request) => (
+                      <tr key={request.id}>
+                        <td className="px-4 py-2 text-white">{request.resumeId}</td>
+                        <td className="px-4 py-2 text-white">{request.entryId}</td>
+                        <td className="px-4 py-2 text-gray-300">{request.details}</td>
+                        <td className="px-4 py-2 text-gray-400 break-all">{request.user}</td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={() => handleApproveRequest(request.id)}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs mr-2"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectRequest(request.id)}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
+                          >
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <RequestActionModal
+            isOpen={modalOpen}
+            onClose={closeModal}
+            onSubmit={handleModalSubmit}
+            actionType={modalAction || 'approve'}
+            loading={modalLoading}
+            hint={modalAction === 'approve' ? 'Describe what you verified about this entry. For example: "Verified employment from Jan 2022 to Dec 2023."' : 'State the reason for rejection. For example: "Insufficient evidence for claimed experience."'}
+          />
+        </div>
+      )}
     </div>
   );
 } 

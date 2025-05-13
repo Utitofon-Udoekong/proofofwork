@@ -67,7 +67,7 @@ export default function CreateResumePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlDraftId = searchParams.get('draftId');
-  const { address, createNewResume, updateResumeURI } = useWeb3();
+  const { address, createNewResume } = useWeb3();
 
   // Access store with a stable reference
   const store = useResumeDraftStore();
@@ -136,6 +136,11 @@ export default function CreateResumePage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newLanguage, setNewLanguage] = useState('');
+
+  // Add new state variables at the top with other state declarations
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [isMinting, setIsMinting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Get the current entry being edited
   const currentEntry = entryForms[activeFormIndex];
@@ -604,14 +609,6 @@ export default function CreateResumePage() {
     setCurrentStep('edit');
   };
 
-  // Handle entry complete - not needed anymore
-  const handleEntryComplete = (saved: boolean) => {
-    if (saved) {
-      // Successfully saved entry
-      console.log('Entry saved successfully');
-    }
-  };
-
   // Save resume without minting NFT or mint as NFT
   const handleSaveResume = async (shouldMint: boolean = false) => {
     if (!isConnected) {
@@ -654,106 +651,44 @@ export default function CreateResumePage() {
         try {
           setCurrentStep('saving');
           handleCreateDraft();
-          // const resumeMetadata: ResumeMetadata = {
-          //   "name": "My Professional Resume",
-          //   "version": "1.0",
-          //   "profile": {
-          //     "name": "John doe",
-          //     "lastUpdated": "2025-05-08T17:24:50.476Z",
-          //     "headline": "Senior Software Engineer",
-          //     "bio": "I am a software guy",
-          //     "location": "San Diego",
-          //     "contactEmail": "me@rah.co",
-          //     "socialLinks": {
-          //       "linkedin": "",
-          //       "github": "https://github.com/mosah",
-          //       "twitter": "https://twitter.com/mosah",
-          //       "website": "https://moserah.com"
-          //     },
-          //     "skills": [
-          //       "Coding",
-          //       "Singing",
-          //       "Dancing"
-          //     ],
-          //     "languages": [
-          //       "English",
-          //       "Ibibio"
-          //     ]
-          //   },
-          //   "entries": [
-          //     {
-          //       "id": "entry_1746723725130_v293ypy",
-          //       "type": "work",
-          //       "title": "Frontend Guy",
-          //       "company": "FRONTG",
-          //       "description": "Did frontend things",
-          //       "startDate": "2022-01-04",
-          //       "endDate": "2024-07-02",
-          //       "organization": "FRONTG",
-          //       "verified": false,
-          //       "attachments": []
-          //     },
-          //     {
-          //       "id": "entry_1746723843414_ilfn4ic",
-          //       "type": "certification",
-          //       "title": "Bachelor of Food",
-          //       "company": "College of food",
-          //       "description": "",
-          //       "startDate": "2025-05-01",
-          //       "endDate": "2027-06-16",
-          //       "organization": "COF",
-          //       "verified": false,
-          //       "attachments": [
-          //         "ipfs://bafkreicabkrdwbnzraxt4xyeslirfxm5uvz46bhkmavbggix6n3qbx7foe" 
-          //       ]
-          //     },
-          //     {
-          //       "id": "entry_1746724407195_b2s57fi",
-          //       "type": "work",
-          //       "title": "Mobile guy",
-          //       "company": "MOBIG",
-          //       "description": "Did mobile things",
-          //       "startDate": "2024-10-16",
-          //       "endDate": "",
-          //       "organization": "",
-          //       "verified": false,
-          //       "attachments": []
-          //     }
-          //   ],
-          //   "createdAt": "2025-05-08T17:14:13.552Z",
-          //   "updatedAt": "2025-05-08T17:24:50.477Z",
-          // }
-
-          // console.log("Resume metadata:", resumeMetadata);
-          // console.log('tokenId', draft.tokenId);
+          
+          // Start attachment upload process
+          setIsUploadingAttachments(true);
+          setUploadProgress(0);
+          
           // Use processAttachmentsForMint to upload attachments and get mint-ready metadata
-          // const resumeMetadata = await useResumeDraftStore.getState().processAttachmentsForMint(draftId);
-          // console.log("Resume metadata:", resumeMetadata);
-          // if (!resumeMetadata) {
-          //   throw new Error('Failed to process attachments for minting');
-          // }
+          const resumeMetadata = await useResumeDraftStore.getState().processAttachmentsForMint(draftId);
+          console.log("Resume metadata:", resumeMetadata);
+          if (!resumeMetadata) {
+            throw new Error('Failed to process attachments for minting');
+          }
 
           // Upload the metadata to IPFS
-          // const ipfsUri = await ipfsService.uploadResumeMetadata(resumeMetadata);
-          console.log("Resume metadata uploaded to IPFS:", 'ipfs://bafkreibifbxu6zhjdpwlrykztb2eiqsns74s3p4bmspwoazsbaemj3afie');
-          if (draft.tokenId) {
-            console.log("Updating resume on blockchain");
-            await updateResumeURI(draft.tokenId, 'ipfs://bafkreibifbxu6zhjdpwlrykztb2eiqsns74s3p4bmspwoazsbaemj3afie');
-            setSuccessMessage('Resume updated on blockchain!');
-          } else {
-            console.log("Creating new resume");
-            const txHash = await createNewResume(resumeName, 'ipfs://bafkreibifbxu6zhjdpwlrykztb2eiqsns74s3p4bmspwoazsbaemj3afie');
-            if (txHash) {
-              // Delete the draft after successful mint
-              useResumeDraftStore.getState().deleteDraft(draftId);
-              setSuccessMessage('Resume created and published on blockchain!');
-            }
+          setUploadProgress(50);
+          const ipfsUri = await ipfsService.uploadResumeMetadata(resumeMetadata);
+          console.log("Resume metadata uploaded to IPFS:", ipfsUri);
+          
+          // Start minting process
+          setIsUploadingAttachments(false);
+          setIsMinting(true);
+          setUploadProgress(75);
+          
+          console.log("Creating new resume");
+          const txHash = await createNewResume(resumeName, ipfsUri);
+          if (txHash) {
+            setTransactionHash(txHash);
+            useResumeDraftStore.getState().deleteDraft(draftId);
+            setSuccessMessage('Resume created and published on blockchain!');
+            setUploadProgress(100);
           }
            
           router.push('/dashboard');
         } catch (mintError) {
           console.error("Error minting resume:", mintError);
           setCurrentStep('edit');
+          setIsUploadingAttachments(false);
+          setIsMinting(false);
+          setUploadProgress(0);
           if (mintError instanceof Error) {
             if (mintError.message.includes('user rejected') ||
               mintError.message.includes('User denied') ||
@@ -767,17 +702,19 @@ export default function CreateResumePage() {
           }
           return;
         }
-      } else {
-        setSuccessMessage('Resume saved as draft successfully!');
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 1500);
       }
+      setSuccessMessage('Resume saved as draft successfully!');
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (error) {
       console.error("Error saving resume:", error);
       setError('An error occurred while saving your resume. Please try again.');
     } finally {
       setIsSubmitting(false);
+      setIsUploadingAttachments(false);
+      setIsMinting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -1789,44 +1726,51 @@ export default function CreateResumePage() {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Creating Your Resume NFT</h1>
+          <h2 className="text-2xl font-bold text-white mb-6">Saving Your Resume</h2>
+          
+          {isUploadingAttachments && (
+            <div className="mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+              </div>
+              <p className="text-gray-300 mb-2">Uploading attachments to IPFS...</p>
+              <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
-          <div className="flex justify-center my-8">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+          {isMinting && (
+            <div className="mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-400"></div>
+              </div>
+              <p className="text-gray-300 mb-2">Minting your resume NFT...</p>
+              <p className="text-sm text-gray-400">This may take a few moments. Please don't close this window.</p>
+            </div>
+          )}
 
-          <p className="text-gray-300 mb-2">
-            Please wait while we create your on-chain resume NFT.
-          </p>
-          <p className="text-gray-400 text-sm mb-6">
-            This process has two steps:
-          </p>
-          <ol className="text-left text-gray-300 mb-6 mx-auto max-w-md">
-            <li className="mb-2 flex items-center">
-              <span className="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-white text-sm">1</span>
-              Please confirm the transaction in your wallet
-            </li>
-            <li className="flex items-center">
-              <span className="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-white text-sm">2</span>
-              Wait for blockchain confirmation (takes ~30 seconds)
-            </li>
-          </ol>
+          {error && (
+            <div className="bg-red-900/50 border border-red-700 p-4 rounded-md mb-6 text-red-200">
+              <p>{error}</p>
+            </div>
+          )}
 
-          <div className="mt-4">
+          <div className="flex justify-center space-x-4">
             <button
-              onClick={() => setCurrentStep('edit')}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              onClick={() => {
+                setCurrentStep('edit');
+                setIsUploadingAttachments(false);
+                setIsMinting(false);
+                setUploadProgress(0);
+              }}
+              className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600"
             >
-              Cancel Minting
+              Cancel
             </button>
-          </div>
-
-          <div className="mt-8 p-4 bg-blue-900/30 rounded-lg text-sm text-blue-300 border border-blue-900/50">
-            <p className="font-medium">Note:</p>
-            <p className="mt-1">
-              If you cancel the transaction or close this page, your resume will still be saved as a draft.
-              You can mint it later from the dashboard.
-            </p>
           </div>
         </div>
       </div>
@@ -1863,12 +1807,6 @@ export default function CreateResumePage() {
             >
               Go to Dashboard
             </Link>
-            {/* <Link
-              href={`/dashboard/resume/${draftId}`}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded"
-            >
-              View Resume
-            </Link> */}
           </div>
         </div>
       </div>

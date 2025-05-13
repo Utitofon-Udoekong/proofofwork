@@ -113,6 +113,7 @@ describe("VerificationManager Contract", function () {
 
     it("should create a verification request", async function () {
       const tx = await verificationManager.createVerificationRequest(
+        addr2.address,
         1, // resumeId
         "entry1",
         addr1.address,
@@ -130,6 +131,7 @@ describe("VerificationManager Contract", function () {
 
     it("should not allow duplicate requests", async function () {
       await verificationManager.createVerificationRequest(
+        addr2.address,
         1,
         "entry1",
         addr1.address,
@@ -137,6 +139,7 @@ describe("VerificationManager Contract", function () {
       );
       await expect(
         verificationManager.createVerificationRequest(
+          addr2.address,
           1,
           "entry1",
           addr1.address,
@@ -154,6 +157,7 @@ describe("VerificationManager Contract", function () {
       );
       await expect(
         verificationManager.createVerificationRequest(
+          addr2.address,
           1,
           "entry1",
           addr2.address,
@@ -164,6 +168,7 @@ describe("VerificationManager Contract", function () {
 
     it("should allow organization to approve request", async function () {
       await verificationManager.createVerificationRequest(
+        addr2.address,
         1,
         "entry1",
         addr1.address,
@@ -182,6 +187,7 @@ describe("VerificationManager Contract", function () {
 
     it("should not allow non-requested organization to approve request", async function () {
       await verificationManager.createVerificationRequest(
+        addr2.address,
         1,
         "entry1",
         addr1.address,
@@ -197,6 +203,7 @@ describe("VerificationManager Contract", function () {
 
     it("should allow organization to reject request", async function () {
       await verificationManager.createVerificationRequest(
+        addr2.address,
         1,
         "entry1",
         addr1.address,
@@ -214,6 +221,7 @@ describe("VerificationManager Contract", function () {
 
     it("should not allow non-requested organization to reject request", async function () {
       await verificationManager.createVerificationRequest(
+        addr2.address,
         1,
         "entry1",
         addr1.address,
@@ -230,10 +238,23 @@ describe("VerificationManager Contract", function () {
     it("should not allow empty entry ID in verification request", async function () {
       await expect(
         verificationManager.createVerificationRequest(
+          addr2.address,
           1,
           "", // empty entry ID
           addr1.address,
           "Please verify my work experience"
+        )
+      ).to.be.revertedWithCustomError(verificationManager, "InvalidEntryId");
+    });
+
+    it("should not allow empty details in verification request", async function () {
+      await expect(
+        verificationManager.createVerificationRequest(
+          addr2.address,
+          1,
+          "entry1",
+          addr1.address,
+          "" // empty details
         )
       ).to.be.revertedWithCustomError(verificationManager, "InvalidEntryId");
     });
@@ -253,6 +274,7 @@ describe("VerificationManager Contract", function () {
       // Create multiple requests
       for (let i = 0; i < 5; i++) {
         await verificationManager.createVerificationRequest(
+          addr2.address,
           i + 1,
           `entry${i + 1}`,
           addr1.address,
@@ -262,12 +284,20 @@ describe("VerificationManager Contract", function () {
     });
 
     it("should retrieve user requests with pagination", async function () {
-      const requests = await verificationManager.getUserRequests(addr2.address, 0, 2);
-      expect(requests.length).to.equal(0);
+      // Initial requests should be retrievable
+      const initialRequests = await verificationManager.getUserRequests(addr2.address, 0, 2);
+      expect(initialRequests.length).to.equal(2);
+      
+      // Get the actual request details
+      const request1 = await verificationManager.getRequest(initialRequests[0]);
+      const request2 = await verificationManager.getRequest(initialRequests[1]);
+      expect(request1.resumeId).to.equal(1);
+      expect(request2.resumeId).to.equal(2);
 
-      // Create requests for addr2
+      // Create additional requests for addr2
       for (let i = 0; i < 3; i++) {
         await verificationManager.connect(addr2).createVerificationRequest(
+          addr2.address,
           i + 6,
           `entry${i + 6}`,
           addr1.address,
@@ -275,14 +305,15 @@ describe("VerificationManager Contract", function () {
         );
       }
 
-      const userRequests = await verificationManager.getUserRequests(addr2.address, 0, 2);
-      expect(userRequests.length).to.equal(2);
+      // Get next page of requests
+      const nextRequests = await verificationManager.getUserRequests(addr2.address, 2, 2);
+      expect(nextRequests.length).to.equal(2);
       
       // Get the actual request details
-      const request1 = await verificationManager.getRequest(userRequests[0]);
-      const request2 = await verificationManager.getRequest(userRequests[1]);
-      expect(request1.resumeId).to.equal(6);
-      expect(request2.resumeId).to.equal(7);
+      const request3 = await verificationManager.getRequest(nextRequests[0]);
+      const request4 = await verificationManager.getRequest(nextRequests[1]);
+      expect(request3.resumeId).to.equal(3);
+      expect(request4.resumeId).to.equal(4);
     });
 
     it("should retrieve organization requests with pagination", async function () {

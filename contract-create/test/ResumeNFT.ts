@@ -66,6 +66,7 @@ describe("ResumeNFT Contract", function () {
 
     it("should allow owner to request verification from verified organization", async function () {
       const tx = await resumeNFT.connect(addr2).requestVerification(
+        addr2.address,
         tokenId,
         "entry1",
         addr1.address,
@@ -77,6 +78,7 @@ describe("ResumeNFT Contract", function () {
     it("should not allow non-owner to request verification", async function () {
       await expect(
         resumeNFT.connect(addr1).requestVerification(
+          addr2.address,
           tokenId,
           "entry1",
           addr1.address,
@@ -88,6 +90,7 @@ describe("ResumeNFT Contract", function () {
     it("should not allow verification request to unverified organization", async function () {
       await expect(
         resumeNFT.connect(addr2).requestVerification(
+          addr2.address,
           tokenId,
           "entry1",
           addr2.address,
@@ -99,6 +102,7 @@ describe("ResumeNFT Contract", function () {
     it("should not allow empty entry ID in verification request", async function () {
       await expect(
         resumeNFT.connect(addr2).requestVerification(
+          addr2.address,
           tokenId,
           "", // empty entry ID
           addr1.address,

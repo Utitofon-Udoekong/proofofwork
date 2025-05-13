@@ -15,8 +15,8 @@ export default function Navbar() {
   const userContext = useUser();
   const address = userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress;
   const pathname = usePathname();
-  const { isConnected: wagmiConnected } = useAccount();
-  const isConnected = authStatus === 'authenticated' && wagmiConnected;
+  const { isConnected: wagmiConnected, isConnecting, isReconnecting } = useAccount();
+  const isConnected = authStatus === 'authenticated' && wagmiConnected && !isConnecting && !isReconnecting;
   
   // Hide navbar on dashboard pages to prevent clash with dashboard layout
   if (pathname.startsWith('/dashboard')) {

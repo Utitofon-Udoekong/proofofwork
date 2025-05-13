@@ -1,29 +1,27 @@
 'use client';
 
-// declare global {
-//   interface Window {
-//     ethereum?: import('ethers').Eip1193Provider;
-//   }
-// }
-
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { userHasWallet } from "@civic/auth-web3";
 import { embeddedWallet } from "@civic/auth-web3/wagmi";
 import { CivicAuthProvider, useUser } from "@civic/auth-web3/react";
-import { useAccount, useConnect, useBalance, useReadContract, useSwitchChain } from "wagmi";
+import { useAccount, useConnect, useBalance, useReadContract, useSwitchChain, useDisconnect } from "wagmi";
 import { useAutoConnect } from "@civic/auth-web3/wagmi";
 import { ResumeMetadata } from '@/app/lib/types';
-import { 
+import {
   ResumeNFT__factory,
   VerificationManager__factory,
 } from '@/app/lib/contracts/contract-types';
 import { contractAddresses } from '@/app/lib/contracts/addresses';
 import { ipfsService } from '@/app/lib/services/ipfs';
-import { readContract, writeContract, simulateContract, waitForTransactionReceipt } from '@wagmi/core'
+import { readContract, writeContract, simulateContract, waitForTransactionReceipt, getConnectors } from '@wagmi/core'
 import { metaMask } from 'wagmi/connectors'
+import { parseError } from '@/app/lib/parseError';
+import type { VerificationRequest, VerificationRequestStatus, Organization } from '@/app/lib/types';
+import { useAppContractEvents } from '@/app/hooks/useAppContractEvents';
+
 // Create a client
 const queryClient = new QueryClient();
 
@@ -35,37 +33,48 @@ const wagmiConfig = createConfig({
   },
   connectors: [
     embeddedWallet(),
+  ],
+});
+
+const wagmiConfigAdmin = createConfig({
+  chains: [sepolia],
+  transports: {
+    [sepolia.id]: http(),
+  },
+  connectors: [
     metaMask(),
   ],
 });
 
-
 interface Web3ContextType {
   userAuthenticated: boolean;
   walletConnected: boolean;
+  isConnectingWallet: boolean;
+  authStatus: 'authenticated' | 'unauthenticated' | 'loading';
   address: string | null;
-  balance: string | null; 
-  tokenId: bigint | null;
+  balance: string | null;
   tokenIds: bigint[];
-  resumeNames: Record<string, ResumeMetadata>;
   // Methods
   connectWallet: () => Promise<void>;
   createWallet: () => Promise<void>;
   createNewResume: (name: string, ipfsUri: string) => Promise<string>;
-  selectResume: (id: bigint) => void;
-  updateResumeURI: (tokenId: string, metadataUri: string) => Promise<boolean>;
-  saveResume: (resumeData: ResumeMetadata) => Promise<boolean>;
+  saveResume: (resumeId: string, resumeData: ResumeMetadata) => Promise<string>;
   getResumes: () => Promise<ResumeMetadata[]>;
-  requestVerification: (entryId: number, organizationAddress: string, message: string) => Promise<void>;
+  requestVerification: (resumeId: string, entryId: string, organizationAddress: string, message: string) => Promise<string>;
   getVerificationStatus: (resumeId: string, entryId: string) => Promise<{ status: 'pending' | 'approved' | 'rejected' | 'none'; details?: string; timestamp?: number }>;
   isLoading: boolean;
   getResumeById: (resumeId: string) => Promise<ResumeMetadata | null>;
-  getOrganizations: () => Promise<Array<{ address: string; name: string }>>;
-  getOrganizationDetails: (address: string) => Promise<any>;
-  registerOrganization: (name: string, email: string, website: string) => Promise<string>;
+  getOrganizations: () => Promise<Organization[]>;
   verifyOrganization: (orgAddress: string) => Promise<void>;
   revokeOrganization: (orgAddress: string) => Promise<void>;
   removeOrganization: (orgAddress: string) => Promise<void>;
+  getOrganizationDetails: (address: string) => Promise<any>;
+  registerOrganization: (name: string, email: string, website: string) => Promise<string>;
+  logout: () => Promise<boolean>;
+  getPendingVerificationRequests: () => Promise<VerificationRequest[]>;
+  getUserVerificationRequests: () => Promise<VerificationRequest[]>;
+  approveVerificationRequest: (requestId: number, verificationDetails: string) => Promise<string>;
+  rejectVerificationRequest: (requestId: number, reason: string) => Promise<string>;
 }
 
 const Web3Context = createContext<Web3ContextType | null>(null);
@@ -88,22 +97,42 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 // Inner provider component that has access to hooks
 function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const userContext = useUser();
-  const { address: wagmiAddress, isConnected } = useAccount();
+  const { address: wagmiAddress, isConnected, isConnecting } = useAccount();
+  const { address: adminAddress } = useAccount({
+    config: wagmiConfigAdmin,
+  });
   const { connectors, connect } = useConnect();
-  const { data: balanceData } = useBalance({ 
-    address: userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress 
+  const { disconnect } = useDisconnect();
+  const { data: balanceData } = useBalance({
+    address: userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress
   });
   const address = userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress;
-  
-  const [tokenId, setTokenId] = useState<bigint | null>(null);
+
   const [tokenIds, setTokenIds] = useState<bigint[]>([]);
-  const [resumeNames, setResumeNames] = useState<Record<string, ResumeMetadata>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // Track auth status
+  const authStatus = useMemo(() => {
+    if (userContext.isLoading) return 'loading';
+    return userContext.user ? 'authenticated' : 'unauthenticated';
+  }, [userContext.isLoading, userContext.user]);
+
+  // Initialize IPFS service on first load
+  useEffect(() => {
+    const initIPFS = async () => {
+      try {
+        await ipfsService.initialize();
+      } catch (error) {
+        console.error('Failed to initialize IPFS service:', error);
+      }
+    };
+    initIPFS();
+  }, []);
 
   // Contract interaction hooks
   // const contractWrite = useContractWriteMutation();
   const { switchChain } = useSwitchChain();
-  
+
   // Query for token IDs owned by the user
   const { data: balance } = useReadContract({
     address: contractAddresses.resumeNFT as `0x${string}`,
@@ -114,35 +143,9 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       enabled: !!address,
     }
   });
-
   // Auto-connect the wallet if user has one
   useAutoConnect();
-  
-  // Load resume names from local storage
-  useEffect(() => {
-    if (address) {
-      try {
-        const storedNames = localStorage.getItem(`resume-names-${address}`);
-        if (storedNames) {
-          setResumeNames(JSON.parse(storedNames));
-        }
-      } catch (error) {
-        console.error("Error loading resume names from storage:", error);
-      }
-    }
-  }, [address]);
-  
-  // Save resume names to local storage when they change
-  useEffect(() => {
-    if (address && Object.keys(resumeNames).length > 0) {
-      try {
-        localStorage.setItem(`resume-names-${address}`, JSON.stringify(resumeNames));
-      } catch (error) {
-        console.error("Error saving resume names to storage:", error);
-      }
-    }
-  }, [resumeNames, address]);
-  
+
   // Fetch token IDs when balance changes
   useEffect(() => {
     const fetchTokenIds = async () => {
@@ -162,19 +165,15 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           }
         }
         setTokenIds(newTokenIds);
-            
-        // Set the first token as active if none is selected
-        if (newTokenIds.length > 0 && !tokenId) {
-          setTokenId(newTokenIds[0]);
-        }
+
       } catch (error) {
         console.error("Error fetching token IDs:", error);
       }
     };
 
     fetchTokenIds();
-  }, [address, balance, tokenId]);
-  
+  }, [address, balance]);
+
   // Get all resumes for the user
   const getResumes = async (): Promise<ResumeMetadata[]> => {
     if (!address || !tokenIds.length) {
@@ -188,11 +187,11 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         functionName: 'balanceOf',
         args: [address as `0x${string}`],
       });
-      
+
       if (balance === BigInt(0)) return [];
 
       const resumes: Array<ResumeMetadata> = [];
-      
+
       // Fetch all NFTs owned by the address
       for (let i = 0; i < Number(balance); i++) {
         const tokenId = await readContract(wagmiConfig, {
@@ -201,7 +200,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           functionName: 'tokenOfOwnerByIndex',
           args: [address as `0x${string}`, BigInt(i)],
         });
-        
+
         if (!tokenId) continue;
 
         const tokenURI = await readContract(wagmiConfig, {
@@ -210,12 +209,11 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           functionName: 'tokenURI',
           args: [tokenId],
         });
-        
+
         if (!tokenURI) continue;
 
         const metadata = await ipfsService.getResumeMetadata(tokenURI);
         if (metadata) {
-          console.log('metadata', metadata);
           metadata.tokenId = tokenId.toString();
           resumes.push(metadata);
         }
@@ -223,28 +221,28 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
 
       return resumes;
     } catch (error) {
-      console.error("Error fetching resumes:", error);
-      return [];
+      throw new Error(parseError(error));
     }
   };
-  
+
   // Request verification for an entry
-  const requestVerification = async (entryId: number, organizationAddress: string, message: string): Promise<void> => {
-    if (!tokenId || !address) {
+  const requestVerification = async (resumeId: string, entryId: string, organizationAddress: string, message: string): Promise<string> => {
+    if (!address) {
       throw new Error('No resume selected or wallet not connected');
     }
 
     try {
       setIsLoading(true);
-      
+
       // Call requestVerification on the ResumeNFT contract
       const { request } = await simulateContract(wagmiConfig, {
         address: contractAddresses.resumeNFT as `0x${string}`,
         abi: ResumeNFT__factory.abi,
         functionName: 'requestVerification',
         args: [
-          tokenId,
-          `entry${entryId}`,
+          address as `0x${string}`,
+          BigInt(resumeId),
+          entryId,
           organizationAddress as `0x${string}`,
           message
         ],
@@ -253,15 +251,17 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       });
 
       const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
       console.log('Verification request submitted:', result);
+      console.log('Transaction receipt:', receipt);
+      return receipt.transactionHash;
     } catch (error) {
-      console.error('Error requesting verification:', error);
-      throw error;
+      throw new Error(parseError(error));
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   // Create a new resume
   const createNewResume = async (name: string, ipfsUri: string): Promise<string> => {
     if (!address) {
@@ -283,7 +283,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       balance: balanceData?.value.toString(),
       balanceInEth: (Number(balanceData?.value) / 1e18).toFixed(4),
     });
-    
+
     try {
       // Check if we're on the correct network
       const currentChain = wagmiConfig.getClient().chain;
@@ -296,7 +296,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
           if (error?.code === 4001) {
             throw new Error("Please switch to Sepolia network to continue");
           }
-          throw new Error(`Failed to switch network: ${error?.message || 'Unknown error'}`);
+          throw new Error(parseError(error));
         }
       }
 
@@ -323,27 +323,12 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
 
       return receipt.transactionHash;
     } catch (error: any) {
-      console.error("Error creating new resume:", {
-        error,
-        message: error?.message,
-        code: error?.code,
-        data: error?.data,
-      });
-      throw error;
+      throw new Error(parseError(error));
     } finally {
       setIsLoading(false);
     }
   };
-  
-  // Select a resume
-  const selectResume = (id: bigint) => {
-    if (tokenIds.includes(id)) {
-      setTokenId(id);
-    } else {
-      console.error("Invalid token ID:", id);
-    }
-  };
-  
+
   // Connect wallet helper - prioritize connecting to the Civic embedded wallet
   const connectWallet = async () => {
     const embeddedConnector = connectors.find(c => c.name?.toLowerCase().includes('embedded'));
@@ -353,7 +338,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       connect({ connector: connectors[0] });
     }
   };
-  
+
   // Create wallet if user doesn't have one
   const createWallet = async () => {
     if (userContext.user && !userHasWallet(userContext)) {
@@ -361,135 +346,55 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       await connectWallet();
     }
   };
-  
-  // Update an existing resume's metadata URI
-  const updateResumeURI = async (tokenId: string, metadataUri: string): Promise<boolean> => {
+
+  // Save entire resume to IPFS and update on-chain
+  const saveResume = async (resumeId: string, resumeData: ResumeMetadata): Promise<string> => {
     if (!isConnected || !address) {
       throw new Error("Wallet not connected. Please connect your wallet first.");
     }
 
     try {
       setIsLoading(true);
-      console.log("Updating resume metadata for token:", tokenId);
-
-      const { request } = await simulateContract(wagmiConfig, {
-        abi: ResumeNFT__factory.abi,
-        address: contractAddresses.resumeNFT as `0x${string}`,
-        functionName: 'updateResumeURI',
-        args: [BigInt(tokenId), metadataUri],
-        account: address as `0x${string}`,
-        chainId: sepolia.id,
-      })
-      
-      const result = await writeContract(wagmiConfig, request)
-
-      console.log("Update resume URI result:", result);
-
-      if (!result) {
-        throw new Error("Failed to update resume URI - no result returned");
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error updating resume URI:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Save entire resume to IPFS and update on-chain
-  const saveResume = async (resumeData: ResumeMetadata): Promise<boolean> => {
-    if (!address || !tokenId) {
-      throw new Error("Resume not initialized");
-    }
-
-    try {
-      setIsLoading(true);
-
+      console.log("Updating resume metadata for resume:", resumeId);
       const metadataUri = await ipfsService.uploadResumeMetadata(resumeData);
 
       const { request } = await simulateContract(wagmiConfig, {
         abi: ResumeNFT__factory.abi,
         address: contractAddresses.resumeNFT as `0x${string}`,
         functionName: 'updateResumeURI',
-        args: [tokenId, metadataUri],
+        args: [BigInt(resumeId), metadataUri],
         account: address as `0x${string}`,
         chainId: sepolia.id,
       })
-      
-      const result = await writeContract(wagmiConfig, request)
 
+      const result = await writeContract(wagmiConfig, request)
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
       console.log("Update resume URI result:", result);
 
       if (!result) {
         throw new Error("Failed to update resume URI - no result returned");
       }
 
-      return true;
+      return receipt.transactionHash;
     } catch (error) {
-      console.error("Error saving resume:", error);
-      return false;
+      throw new Error(parseError(error));
     } finally {
       setIsLoading(false);
     }
   };
 
-
-  const getResumeById = async (resumeId: string): Promise<ResumeMetadata | null> => {
+  // Memoized getResumeById
+  const getResumeById = useCallback(async (resumeId: string): Promise<ResumeMetadata | null> => {
     try {
       const resume = await getResumes().then(resumes => resumes.find(r => r.tokenId === resumeId));
       return resume || null;
     } catch (error) {
-      console.error('Error fetching resume by id:', error);
-      throw error;
+      throw new Error(parseError(error));
     }
-  }
+  }, [getResumes]);
 
-  const getOrganizations = async (): Promise<Array<{ address: string; name: string }>> => {
-    try {
-      // Get the total number of organizations
-      const orgCount = await readContract(wagmiConfig, {
-        address: contractAddresses.verificationManager as `0x${string}`,
-        abi: VerificationManager__factory.abi,
-        functionName: 'getOrganizationCount',
-      });
-
-      const organizations: Array<{ address: string; name: string }> = [];
-
-      // Fetch each organization's details
-      for (let i = 0; i < Number(orgCount); i++) {
-        const orgAddress = await readContract(wagmiConfig, {
-          address: contractAddresses.verificationManager as `0x${string}`,
-          abi: VerificationManager__factory.abi,
-          functionName: 'getOrganizationAtIndex',
-          args: [BigInt(i)],
-        });
-
-        const orgDetails = await readContract(wagmiConfig, {
-          address: contractAddresses.verificationManager as `0x${string}`,
-          abi: VerificationManager__factory.abi,
-          functionName: 'getOrganizationDetails',
-          args: [orgAddress],
-        });
-
-        // // Only include verified organizations
-        // if (orgDetails[3]) { // orgDetails[3] is the verifiedStatus
-        // }
-        organizations.push({
-          address: orgAddress.toString(),
-          name: orgDetails[0], // orgDetails[0] is the name
-        });
-      }
-
-      return organizations;
-    } catch (error) {
-      console.error("Error fetching organizations:", error);
-      return [];
-    }
-  };
-
-  const getVerificationStatus = async (resumeId: string, entryId: string): Promise<{ status: 'pending' | 'approved' | 'rejected' | 'none'; details?: string; timestamp?: number }> => {
+  // Memoized getVerificationStatus
+  const getVerificationStatus = useCallback(async (resumeId: string, entryId: string): Promise<{ status: 'pending' | 'approved' | 'rejected' | 'none'; details?: string; timestamp?: number }> => {
     try {
       // Get the request ID for this entry
       const requestId = await readContract(wagmiConfig, {
@@ -512,8 +417,8 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       });
 
       // Convert the status from the contract enum to our string type
-      const status = request.status === 0 ? 'pending' as const : 
-                    request.status === 1 ? 'approved' as const : 'rejected' as const;
+      const status = request.status === 0 ? 'pending' as const :
+        request.status === 1 ? 'approved' as const : 'rejected' as const;
 
       return {
         status,
@@ -521,8 +426,119 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         timestamp: Number(request.timestamp),
       };
     } catch (error) {
-      console.error('Error getting verification status:', error);
-      return { status: 'none' as const };
+      throw new Error(parseError(error));
+    }
+  }, []);
+
+  // Memoized getOrganizations
+  const getOrganizations = useCallback(async (): Promise<Organization[]> => {
+    try {
+      // Get the total number of organizations
+      const orgCount = await readContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'getOrganizationCount',
+      });
+
+      const organizations: Organization[] = [];
+
+      // Fetch each organization's details
+      for (let i = 0; i < Number(orgCount); i++) {
+        const orgAddress = await readContract(wagmiConfig, {
+          address: contractAddresses.verificationManager as `0x${string}`,
+          abi: VerificationManager__factory.abi,
+          functionName: 'getOrganizationAtIndex',
+          args: [BigInt(i)],
+          chainId: sepolia.id,
+        });
+        const orgDetails = await readContract(wagmiConfig, {
+          address: contractAddresses.verificationManager as `0x${string}`,
+          abi: VerificationManager__factory.abi,
+          functionName: 'getOrganizationDetails',
+          args: [orgAddress],
+          chainId: sepolia.id,
+        });
+        organizations.push({
+          address: orgAddress.toString(),
+          name: orgDetails[0],
+          email: orgDetails[1],
+          website: orgDetails[2],
+          isVerified: orgDetails[3],
+          verificationTimestamp: Number(orgDetails[4]),
+          lastUpdateTimestamp: Number(orgDetails[5]),
+          exists: orgDetails[6],
+        });
+      }
+      return organizations;
+    } catch (error) {
+      throw new Error(parseError(error));
+    }
+  }, []);
+
+  const verifyOrganization = async (orgAddress: string) => {
+    if (!adminAddress) throw new Error("Wallet not connected");
+    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    try {
+      const { request } = await simulateContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'verifyOrganization',
+        args: [orgAddress as `0x${string}`],
+        account: adminAddress as `0x${string}`,
+        chainId: sepolia.id,
+        connector,
+      });
+      const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
+      console.log("Transaction receipt:", receipt);
+    } catch (error) {
+      console.error("Error verifying organization:", error);
+      throw new Error(parseError(error));
+    }
+  };
+
+  const revokeOrganization = async (orgAddress: string) => {
+    if (!adminAddress) throw new Error("Wallet not connected");
+
+    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    try {
+      const { request } = await simulateContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'revokeOrganization',
+        args: [orgAddress as `0x${string}`],
+        account: adminAddress as `0x${string}`,
+        chainId: sepolia.id,
+        connector,
+      });
+      const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
+      console.log("Transaction receipt:", receipt);
+    } catch (error) {
+      console.error("Error revoking organization:", error);
+      throw new Error(parseError(error));
+    }
+  };
+
+  const removeOrganization = async (orgAddress: string) => {
+    if (!adminAddress) throw new Error("Wallet not connected");
+    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    try {
+      const { request } = await simulateContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'removeOrganization',
+        args: [orgAddress as `0x${string}`],
+        account: adminAddress as `0x${string}`,
+        chainId: sepolia.id,
+        connector,
+      });
+      const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
+      console.log("Transaction receipt:", receipt);
+    } catch (error) {
+      console.error("Error removing organization:", error);
+      throw new Error(parseError(error));
     }
   };
 
@@ -536,14 +552,13 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       });
       return details;
     } catch (error) {
-      console.error('Error getting organization details:', error);
-      throw error;
+      throw new Error(parseError(error));
     }
   };
 
   const registerOrganization = async (name: string, email: string, website: string): Promise<string> => {
     if (!address) throw new Error('No wallet connected');
-    
+
     try {
       const { request } = await simulateContract(wagmiConfig, {
         address: contractAddresses.verificationManager as `0x${string}`,
@@ -559,68 +574,191 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       console.log('Receipt:', receipt);
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Error registering organization:', error);
-      throw error;
+      throw new Error(parseError(error));
     }
   };
 
-  // Admin-only organization moderation methods
-  const verifyOrganization = async (orgAddress: string) => {
-    if (!address) throw new Error("Wallet not connected");
-    const { request } = await simulateContract(wagmiConfig, {
-      address: contractAddresses.verificationManager as `0x${string}`,
-      abi: VerificationManager__factory.abi,
-      functionName: 'verifyOrganization',
-      args: [orgAddress as `0x${string}`],
-      account: address as `0x${string}`,
-      chainId: sepolia.id,
-    });
-    const result = await writeContract(wagmiConfig, request);
-    await waitForTransactionReceipt(wagmiConfig, { hash: result });
+  // Get pending verification requests for the organization
+  const getPendingVerificationRequests = async (): Promise<VerificationRequest[]> => {
+    if (!address) throw new Error('No wallet connected');
+    const statusMap: VerificationRequestStatus[] = ["pending", "approved", "rejected"];
+    try {
+      const requestIds = await readContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'getPendingRequestsForOrg',
+        args: [address as `0x${string}`, BigInt(0), BigInt(50)], // Get up to 50 requests
+      });
+
+      const requests = await Promise.all(
+        requestIds.map(async (id) => {
+          const request = await readContract(wagmiConfig, {
+            address: contractAddresses.verificationManager as `0x${string}`,
+            abi: VerificationManager__factory.abi,
+            functionName: 'getRequest',
+            args: [id],
+          });
+
+          return {
+            id: Number(id),
+            user: request.user.toString(),
+            resumeId: Number(request.resumeId),
+            entryId: request.entryId,
+            details: request.details,
+            status: statusMap[Number(request.status)],
+            timestamp: Number(request.timestamp),
+            verificationDetails: request.verificationDetails,
+          } as VerificationRequest;
+        })
+      );
+
+      return requests;
+    } catch (error) {
+      throw new Error(parseError(error));
+    }
   };
 
-  const revokeOrganization = async (orgAddress: string) => {
-    if (!address) throw new Error("Wallet not connected");
-    const { request } = await simulateContract(wagmiConfig, {
-      address: contractAddresses.verificationManager as `0x${string}`,
-      abi: VerificationManager__factory.abi,
-      functionName: 'revokeOrganization',
-      args: [orgAddress as `0x${string}`],
-      account: address as `0x${string}`,
-      chainId: sepolia.id,
-    });
-    const result = await writeContract(wagmiConfig, request);
-    await waitForTransactionReceipt(wagmiConfig, { hash: result });
+  // Get verification requests for a user
+  const getUserVerificationRequests = async (): Promise<VerificationRequest[]> => {
+    if (!address) throw new Error('No wallet connected');
+    const statusMap: VerificationRequestStatus[] = ["pending", "approved", "rejected"];
+    try {
+      const requestIds = await readContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'getUserRequests',
+        args: [address as `0x${string}`, BigInt(0), BigInt(50)], // Get up to 50 requests
+      });
+
+      const requests = await Promise.all(
+        requestIds.map(async (id) => {
+          const request = await readContract(wagmiConfig, {
+            address: contractAddresses.verificationManager as `0x${string}`,
+            abi: VerificationManager__factory.abi,
+            functionName: 'getRequest',
+            args: [id],
+          });
+
+          return {
+            id: Number(id),
+            user: request.user.toString(),
+            resumeId: Number(request.resumeId),
+            entryId: request.entryId,
+            details: request.details,
+            status: statusMap[Number(request.status)],
+            timestamp: Number(request.timestamp),
+            verificationDetails: request.verificationDetails,
+          } as VerificationRequest;
+        })
+      );
+
+      return requests;
+    } catch (error) {
+      throw new Error(parseError(error));
+    }
   };
 
-  const removeOrganization = async (orgAddress: string) => {
-    if (!address) throw new Error("Wallet not connected");
-    const { request } = await simulateContract(wagmiConfig, {
-      address: contractAddresses.verificationManager as `0x${string}`,
-      abi: VerificationManager__factory.abi,
-      functionName: 'removeOrganization',
-      args: [orgAddress as `0x${string}`],
-      account: address as `0x${string}`,
-      chainId: sepolia.id,
-    });
-    const result = await writeContract(wagmiConfig, request);
-    await waitForTransactionReceipt(wagmiConfig, { hash: result });
+  // Approve a verification request
+  const approveVerificationRequest = async (requestId: number, verificationDetails: string): Promise<string> => {
+    if (!address) throw new Error('No wallet connected');
+
+    try {
+      setIsLoading(true);
+      const { request } = await simulateContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'approveRequest',
+        args: [BigInt(requestId), verificationDetails],
+        account: address as `0x${string}`,
+        chainId: sepolia.id,
+      });
+
+      const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
+      return receipt.transactionHash;
+    } catch (error) {
+      throw new Error(parseError(error));
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Reject a verification request
+  const rejectVerificationRequest = async (requestId: number, reason: string): Promise<string> => {
+    if (!address) throw new Error('No wallet connected');
+
+    try {
+      setIsLoading(true);
+      const { request } = await simulateContract(wagmiConfig, {
+        address: contractAddresses.verificationManager as `0x${string}`,
+        abi: VerificationManager__factory.abi,
+        functionName: 'rejectRequest',
+        args: [BigInt(requestId), reason],
+        account: address as `0x${string}`,
+        chainId: sepolia.id,
+      });
+
+      const result = await writeContract(wagmiConfig, request);
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: result });
+      return receipt.transactionHash;
+    } catch (error) {
+      throw new Error(parseError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- LOGOUT METHOD ---
+  const logout = async (): Promise<boolean> => {
+    try {
+      if (userContext.signOut) await userContext.signOut();
+      disconnect();
+      return true;
+    } catch (e) {
+      console.error("Error during logout:", e);
+      return false;
+    }
+  };
+
+  const queryClient = useQueryClient();
+
+  useAppContractEvents((eventName, args, contract) => {
+    if (contract === 'VerificationManager') {
+      if (
+        eventName === 'OrganizationAdded' ||
+        eventName === 'OrganizationVerified' ||
+        eventName === 'OrganizationRevoked' ||
+        eventName === 'OrganizationRemoved'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      }
+      if (
+        eventName === 'RequestCreated' ||
+        eventName === 'RequestApproved' ||
+        eventName === 'RequestRejected'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['verificationRequests'] });
+      }
+    }
+    if (contract === 'ResumeNFT') {
+      if (eventName === 'Transfer') {
+        queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      }
+    }
+  });
 
   // Create context value
   const contextValue: Web3ContextType = {
     userAuthenticated: !!userContext.user,
     walletConnected: !!address,
+    isConnectingWallet: isConnecting,
+    authStatus,
     address: address || null,
     balance: balanceData ? `${(Number(balanceData.value) / 10 ** 18).toFixed(4)} ${balanceData.symbol}` : null,
-    tokenId,
     tokenIds,
-    resumeNames,
     connectWallet,
     createWallet,
     createNewResume,
-    selectResume,
-    updateResumeURI,
     saveResume,
     getResumes,
     requestVerification,
@@ -628,13 +766,17 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     isLoading,
     getResumeById,
     getOrganizations,
-    getOrganizationDetails,
-    registerOrganization,
     verifyOrganization,
     revokeOrganization,
     removeOrganization,
+    getOrganizationDetails,
+    registerOrganization,
+    logout,
+    getPendingVerificationRequests,
+    getUserVerificationRequests,
+    approveVerificationRequest,
+    rejectVerificationRequest,
   };
-  
   return (
     <Web3Context.Provider value={contextValue}>
       {children}
@@ -649,4 +791,4 @@ export function useWeb3() {
     throw new Error('useWeb3 must be used within a Web3Provider');
   }
   return context;
-} 
+}

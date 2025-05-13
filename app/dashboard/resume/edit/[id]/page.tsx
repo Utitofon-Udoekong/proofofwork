@@ -4,7 +4,6 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { ResumeMetadata, EntryType, ResumeEntry } from "@/app/lib/types";
 import { useWeb3 } from "@/app/providers/Web3Provider";
-import { ipfsService } from "@/app/lib/services/ipfs";
 
 export default function EditResumePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -48,8 +47,8 @@ export default function EditResumePage({ params }: { params: Promise<{ id: strin
       setIsSubmitting(true);
       setError(null);
       
-      const success = await saveResume(resumeMetadata);
-      if (success) {
+      const transactionHash = await saveResume(id, resumeMetadata);
+      if (transactionHash) {
         router.push(`/dashboard/resume/${id}`);
       } else {
         setError("Failed to save resume. Please try again.");

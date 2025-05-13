@@ -13,7 +13,7 @@ export class IPFSService {
   private initialized = false;
   private spaceProvisioned = false;
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Get the singleton instance of the IPFS service
@@ -39,8 +39,8 @@ export class IPFSService {
         console.error('Failed to initialize Web3.Storage client:', error);
         this.initialized = false;
         return;
+      }
     }
-  }
 
     // Skip space provisioning if we've already done it or if we don't have an email
     if (this.spaceProvisioned || !WEB3_STORAGE_EMAIL || !WEB3_STORAGE_EMAIL.includes('@') || !this.web3StorageClient) {
@@ -48,7 +48,9 @@ export class IPFSService {
     }
 
     try {
+      console.log('Initializing Web3.Storage client');
       // Login with email address to authenticate agent
+      console.log('Logging in with email:', WEB3_STORAGE_EMAIL);
       const email = WEB3_STORAGE_EMAIL as `${string}@${string}`;
       const account = await this.web3StorageClient.login(email);
       console.log('Login successful');
@@ -89,8 +91,8 @@ export class IPFSService {
   public async uploadFile(file: File): Promise<string> {
     await this.initialize();
     if (!this.web3StorageClient) throw new Error('Web3.Storage client not initialized');
-        const cid = await this.web3StorageClient.uploadFile(file);
-        return `ipfs://${cid}`;
+    const cid = await this.web3StorageClient.uploadFile(file);
+    return `ipfs://${cid}`;
   }
 
   /**
@@ -101,8 +103,8 @@ export class IPFSService {
   public async uploadDirectory(files: File[]): Promise<string> {
     await this.initialize();
     if (!this.web3StorageClient) throw new Error('Web3.Storage client not initialized');
-        const cid = await this.web3StorageClient.uploadDirectory(files);
-        return `ipfs://${cid}`;
+    const cid = await this.web3StorageClient.uploadDirectory(files);
+    return `ipfs://${cid}`;
   }
 
   /**
@@ -143,13 +145,13 @@ export class IPFSService {
    */
   public async getResumeMetadata(ipfsUri: string): Promise<ResumeMetadata> {
     if (!ipfsUri) throw new Error('No IPFS URI provided');
-    
+
     const httpUrl = this.getHttpUrl(ipfsUri);
     const response = await fetch(httpUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch resume metadata: ${response.statusText}`);
     }
-    
+
     const metadata = await response.json();
     return metadata as ResumeMetadata;
   }

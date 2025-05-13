@@ -36,6 +36,7 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
 
     // Request verification from an organization
     function requestVerification(
+        address user,
         uint256 tokenId,
         string memory entryId,
         address organization,
@@ -47,6 +48,7 @@ contract ResumeNFT is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         if (bytes(details).length == 0) revert InvalidEntryId();
         
         return verificationManager.createVerificationRequest(
+            user,
             tokenId,
             entryId,
             organization,

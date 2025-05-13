@@ -21,7 +21,7 @@ const config: HardhatUserConfig = {
         process.env.ORG_PRIVATE_KEY as string, process.env.OTHERORG_PRIVATE_KEY as string],
     },
   },
-  defaultNetwork: "hardhat",
+  defaultNetwork: "sepolia",
 };
 
 export default config;
