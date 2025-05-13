@@ -133,7 +133,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     }
   });
   // Auto-connect the wallet if user has one
-  useAutoConnect();
+  // useAutoConnect();
 
   // Fetch token IDs when balance changes
   useEffect(() => {
@@ -720,6 +720,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
         eventName === 'OrganizationRemoved'
       ) {
         queryClient.invalidateQueries({ queryKey: ['organizations'] });
+        queryClient.invalidateQueries({ queryKey: ['organizationDetails'] });
       }
       if (
         eventName === 'RequestCreated' ||

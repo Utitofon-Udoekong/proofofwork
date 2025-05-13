@@ -3,7 +3,7 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { metaMask } from "wagmi/connectors";
 import { useState } from "react";
 import { useUser } from "@civic/auth-web3/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWeb3 } from "../providers/Web3Provider";
 import { useOrganizations } from '@/app/hooks/useOrganizations';
@@ -15,12 +15,13 @@ const AdminNavbar = () => {
   const { signOut } = useUser();
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
-
+  const router = useRouter();
+  
   const handleSignOut = async () => {
     try {
       await signOut();
       disconnect();
-      redirect('/');
+      router.replace('/');
     } catch (error) {
       console.error(error);
     }

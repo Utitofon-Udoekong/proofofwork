@@ -24,25 +24,8 @@ export default function Home() {
             <p className="text-2xl text-gray-300 max-w-3xl mx-auto">
               Build your professional identity on the blockchain. Create verifiable resumes that employers trust.
             </p>
-            <div className="flex justify-center gap-4">
-              {isConnected ? (
-                <>
-                  <Link
-                    href="/dashboard/organizations"
-                    className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20"
-                  >
-                    Create Organization
-                  </Link>
-                  <Link
-                    href="/dashboard/resume/create"
-                    className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/20"
-                  >
-                    Create Resume
-                  </Link>
-                </>
-              ) : (
-                <CivicAuthButton />
-              )}
+            <div className="flex justify-center">
+              <CivicAuthButton />
             </div>
           </div>
         </div>
@@ -143,11 +126,9 @@ export default function Home() {
           <p className="text-xl text-gray-300 mb-12 max-w-3xl mx-auto">
             Join the future of professional credentials. Create your blockchain-powered resume today.
           </p>
-          {!isConnected && (
-            <div className="flex justify-center">
+          <div className="flex justify-center">
               <CivicAuthButton />
             </div>
-          )}
         </div>
       </div>
 

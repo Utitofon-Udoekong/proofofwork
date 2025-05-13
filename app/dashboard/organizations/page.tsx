@@ -1,9 +1,10 @@
 'use client';
 
 import { useWeb3 } from '@/app/providers/Web3Provider';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from "next/link";
 import { usePendingVerificationRequests } from '@/app/hooks/usePendingVerificationRequests';
+import { useOrganizationDetails } from '@/app/hooks/useOrganizationDetails';
 
 interface OrganizationStatus {
   name: string;
@@ -88,15 +89,11 @@ function RequestActionModal({
 export default function OrganizationPage() {
   const { 
     address, 
-    getOrganizationDetails, 
     registerOrganization,
     approveVerificationRequest,
     rejectVerificationRequest,
     isLoading
   } = useWeb3();
-  const [status, setStatus] = useState<OrganizationStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -107,38 +104,13 @@ export default function OrganizationPage() {
   const [modalAction, setModalAction] = useState<'approve' | 'reject' | null>(null);
   const [modalRequestId, setModalRequestId] = useState<number | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Use the new hook for organization details
+  const { data: details, isLoading: loading, error: detailsError } = useOrganizationDetails(address || undefined);
 
   // Use the new hook for pending requests
   const { data: pendingRequests = [], isLoading: loadingRequests, error: pendingError } = usePendingVerificationRequests();
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      if (!address) return;
-      
-      try {
-        setLoading(true);
-        const details = await getOrganizationDetails(address);
-        if (details) {
-          setStatus({
-            name: details[0],
-            email: details[1],
-            website: details[2],
-            isVerified: details[3],
-            verificationTimestamp: Number(details[4]),
-            lastUpdateTimestamp: Number(details[5]),
-            exists: details[6],
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching organization status:', err);
-        setError('Failed to load organization status');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStatus();
-  }, [address, getOrganizationDetails]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,19 +120,7 @@ export default function OrganizationPage() {
       setSubmitting(true);
       setError(null);
       await registerOrganization(formData.name, formData.email, formData.website);
-      // Refresh status after registration
-      const details = await getOrganizationDetails(address);
-      if (details) {
-        setStatus({
-          name: details[0],
-          email: details[1],
-          website: details[2],
-          isVerified: details[3],
-          verificationTimestamp: Number(details[4]),
-          lastUpdateTimestamp: Number(details[5]),
-          exists: details[6],
-        });
-      }
+      // Query will refetch automatically on event
     } catch (err: any) {
       console.error('Error registering organization:', err);
       setError(err.message || 'Failed to register organization');
@@ -226,7 +186,17 @@ export default function OrganizationPage() {
     );
   }
 
-  if (!status?.exists) {
+  if (detailsError) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-red-900/30 border border-red-900/50 rounded text-red-300 p-4">
+          {detailsError.toString()}
+        </div>
+      </div>
+    );
+  }
+
+  if (!details || !details[6]) { // details[6] is 'exists'
     return (
       <div className="max-w-4xl mx-auto p-6">
         <h1 className="text-2xl font-bold text-white mb-6">Register Organization</h1>
@@ -289,6 +259,17 @@ export default function OrganizationPage() {
       </div>
     );
   }
+
+  // Use details for status rendering
+  const status = {
+    name: details[0],
+    email: details[1],
+    website: details[2],
+    isVerified: details[3],
+    verificationTimestamp: Number(details[4]),
+    lastUpdateTimestamp: Number(details[5]),
+    exists: details[6],
+  };
 
   return (
     <div className="mx-auto p-6">

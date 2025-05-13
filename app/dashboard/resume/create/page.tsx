@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { EntryType, EntryTypeEnum, ProfileMetadata, ResumeEntry, ResumeMetadata } from '@/app/lib/types';
 import FileUploader from '@/app/components/ui/FileUploader';
-import { useFormAutoSave } from '@/app/lib/hooks/useAutoSave';
+import { useFormAutoSave } from '@/app/hooks/useAutoSave';
 import { IPFSService } from '@/app/lib/services/ipfs';
 import Link from 'next/link';
 

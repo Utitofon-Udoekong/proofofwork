@@ -144,8 +144,6 @@ export default function DashboardLayout({
         </div>
       </nav>
 
-      {/* Hamburger for mobile */}
-
 
       {/* Main Content with Sidebar */}
       <div className="flex pt-16">
