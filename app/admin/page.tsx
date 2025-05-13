@@ -1,7 +1,7 @@
 "use client";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { metaMask } from "wagmi/connectors";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useUser } from "@civic/auth-web3/react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -79,6 +79,7 @@ export default function AdminPage() {
 
   // Admin actions
   const handleVerify = async (orgAddress: string) => {
+    
     setTxLoading(orgAddress);
     setTxError(null);
     try {

@@ -29,22 +29,14 @@ const queryClient = new QueryClient();
 const wagmiConfig = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: http(process.env.sepoliaAlchemyApiKey),
   },
   connectors: [
     embeddedWallet(),
-  ],
-});
-
-const wagmiConfigAdmin = createConfig({
-  chains: [sepolia],
-  transports: {
-    [sepolia.id]: http(),
-  },
-  connectors: [
     metaMask(),
   ],
 });
+
 
 interface Web3ContextType {
   userAuthenticated: boolean;
@@ -98,9 +90,6 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const userContext = useUser();
   const { address: wagmiAddress, isConnected, isConnecting } = useAccount();
-  const { address: adminAddress } = useAccount({
-    config: wagmiConfigAdmin,
-  });
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
   const { data: balanceData } = useBalance({
@@ -476,15 +465,15 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const verifyOrganization = async (orgAddress: string) => {
-    if (!adminAddress) throw new Error("Wallet not connected");
-    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    if (!address) throw new Error("Wallet not connected");
+    const connector = getConnectors(wagmiConfig).find(c => c.name === 'MetaMask');
     try {
       const { request } = await simulateContract(wagmiConfig, {
         address: contractAddresses.verificationManager as `0x${string}`,
         abi: VerificationManager__factory.abi,
         functionName: 'verifyOrganization',
         args: [orgAddress as `0x${string}`],
-        account: adminAddress as `0x${string}`,
+        account: address as `0x${string}`,
         chainId: sepolia.id,
         connector,
       });
@@ -498,16 +487,16 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   };
 
   const revokeOrganization = async (orgAddress: string) => {
-    if (!adminAddress) throw new Error("Wallet not connected");
+    if (!address) throw new Error("Wallet not connected");
 
-    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    const connector = getConnectors(wagmiConfig).find(c => c.name === 'MetaMask');
     try {
       const { request } = await simulateContract(wagmiConfig, {
         address: contractAddresses.verificationManager as `0x${string}`,
         abi: VerificationManager__factory.abi,
         functionName: 'revokeOrganization',
         args: [orgAddress as `0x${string}`],
-        account: adminAddress as `0x${string}`,
+        account: address as `0x${string}`,
         chainId: sepolia.id,
         connector,
       });
@@ -521,15 +510,15 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   };
 
   const removeOrganization = async (orgAddress: string) => {
-    if (!adminAddress) throw new Error("Wallet not connected");
-    const connector = getConnectors(wagmiConfigAdmin).find(c => c.name === 'MetaMask');
+    if (!address) throw new Error("Wallet not connected");
+    const connector = getConnectors(wagmiConfig).find(c => c.name === 'MetaMask');
     try {
       const { request } = await simulateContract(wagmiConfig, {
         address: contractAddresses.verificationManager as `0x${string}`,
         abi: VerificationManager__factory.abi,
         functionName: 'removeOrganization',
         args: [orgAddress as `0x${string}`],
-        account: adminAddress as `0x${string}`,
+        account: address as `0x${string}`,
         chainId: sepolia.id,
         connector,
       });

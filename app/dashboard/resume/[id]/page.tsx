@@ -308,6 +308,20 @@ const getEntryTypeName = (type: string) => {
   }
 };
 
+const VerifiedBadge = () => (
+  <div className="group relative inline-block">
+    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-600/20 text-green-400 border border-green-500">
+      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      Verified
+    </span>
+    <span className="absolute left-1/2 -translate-x-1/2 mt-2 w-max bg-gray-900 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+      This entry has been verified by an organization
+    </span>
+  </div>
+);
+
 export default function ResumeViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { getResumeById, address: userAddress, requestVerification, getVerificationStatus } = useWeb3();
@@ -395,14 +409,7 @@ export default function ResumeViewPage({ params }: { params: Promise<{ id: strin
     const status = verificationStatuses[entryId];
 
     if (status?.status === 'approved') {
-      return (
-        <div className="flex items-center text-green-400">
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-          </svg>
-          Verified
-        </div>
-      );
+      return <VerifiedBadge />;
     }
 
     if (status?.status === 'pending') {
@@ -646,7 +653,7 @@ export default function ResumeViewPage({ params }: { params: Promise<{ id: strin
           {/* Resume Entries */}
           {resume.entries && resume.entries.length > 0 ? (
             resume.entries.map((entry, index) => (
-              <div key={index} className="mb-8 last:mb-0 p-6 border-b border-gray-700 last:border-b-0">
+              <div key={index} className="mb-8 py-6 last:mb-0 border-b border-gray-700 last:border-b-0">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-2">
                     {getEntryTypeIcon(entry.type)}
