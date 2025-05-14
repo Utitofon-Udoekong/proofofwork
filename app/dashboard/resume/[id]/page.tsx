@@ -1,6 +1,5 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { use, useEffect, useState } from 'react';
 import { ResumeMetadata, Organization } from '@/app/lib/types';
@@ -8,6 +7,7 @@ import { ipfsService } from '@/app/lib/services/ipfs';
 import Link from 'next/link';
 import { parseError } from '@/app/lib/parseError';
 import { useOrganizations } from '@/app/hooks/useOrganizations';
+import Image from 'next/image';
 
 // Modal component for attachments
 function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onClose: () => void; attachment: string }) {
@@ -72,10 +72,12 @@ function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onC
               title="PDF Preview"
             />
           ) : contentType.startsWith('image/') ? (
-            <img
+            <Image
               src={gatewayUrl}
               alt="Attachment Preview"
               className="max-w-full h-auto"
+              width={500}
+              height={500}
             />
           ) : (
             <div className="text-center py-8">

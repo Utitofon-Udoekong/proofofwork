@@ -4,14 +4,15 @@ import { useState, useEffect, use } from "react";
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { ResumeMetadata } from '@/app/lib/types';
 import { ipfsService } from '@/app/lib/services/ipfs';
+import Image from 'next/image';
 
 // Modal component for attachments
 function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onClose: () => void; attachment: string }) {
-  if (!isOpen) return null;
-
   const gatewayUrl = ipfsService.getHttpUrl(attachment);
   const [contentType, setContentType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   useEffect(() => {
     const checkContentType = async () => {
@@ -68,10 +69,13 @@ function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onC
               title="PDF Preview"
             />
           ) : contentType.startsWith('image/') ? (
-            <img
+            <Image
               src={gatewayUrl}
               alt="Attachment Preview"
               className="max-w-full h-auto"
+              width={800}
+              height={600}
+              style={{ objectFit: 'contain' }}
             />
           ) : (
             <div className="text-center py-8">
@@ -233,7 +237,7 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
     };
     
     fetchData();
-  }, [id]);
+  }, [id, getResumeById]);
 
   if (loading) {
     return (
@@ -254,7 +258,7 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
         <div className="bg-red-900/50 border border-red-700 p-4 rounded-md text-red-200">
           <p>{error}</p>
         </div>
-          </div>
+      </div>
     );
   }
 
@@ -368,11 +372,11 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
                     <div className="flex flex-wrap gap-2">
                       {resume.profile.skills.map((skill, index) => (
                         <span key={index} className="px-2 py-1 bg-gray-700 rounded-full text-sm text-white">
-                    {skill}
-                  </span>
-                ))}
-            </div>
-          </div>
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -387,11 +391,11 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
                       {resume.profile.languages.map((language, index) => (
                         <span key={index} className="px-2 py-1 bg-gray-700 rounded-full text-sm text-white">
                           {language}
-                </span>
+                        </span>
                       ))}
                     </div>
                   </div>
-              </div>
+                </div>
               )}
 
               {resume.profile.bio && (
@@ -401,120 +405,120 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
                   </div>
                   <div className="md:w-3/4">
                     <p className="text-white whitespace-pre-line">{resume.profile.bio}</p>
-              </div>
-              </div>
+                  </div>
+                </div>
               )}
+            </div>
           </div>
         </div>
         
-          {/* Resume Entries */}
-          {resume.entries && resume.entries.length > 0 ? (
-            resume.entries.map((entry, index) => (
-              <div key={index} className="mb-8 last:mb-0 border-b border-gray-700 last:border-b-0">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2">
-                    {getEntryTypeIcon(entry.type)}
-                    <h3 className="text-lg font-semibold text-white">{entry.title}</h3>
-                    <span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 font-medium">
-                      {getEntryTypeName(entry.type)}
-                    </span>
-                  </div>
-                  {entry.verified && (
-                    <div className="flex items-center text-green-400">
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Verified
-                    </div>
-                  )}
+        {/* Resume Entries */}
+        {resume.entries && resume.entries.length > 0 ? (
+          resume.entries.map((entry, index) => (
+            <div key={index} className="mb-8 last:mb-0 border-b border-gray-700 last:border-b-0">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-2">
+                  {getEntryTypeIcon(entry.type)}
+                  <h3 className="text-lg font-semibold text-white">{entry.title}</h3>
+                  <span className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 font-medium">
+                    {getEntryTypeName(entry.type)}
+                  </span>
                 </div>
-
-                <div className="space-y-3">
-                  <div className="flex flex-col md:flex-row">
-                    <div className="md:w-1/4">
-                      <p className="text-gray-300 font-medium">Organization</p>
-                    </div>
-                    <div className="md:w-3/4">
-                      <p className="text-white">{entry.organization || entry.company}</p>
-                    </div>
+                {entry.verified && (
+                  <div className="flex items-center text-green-400">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Verified
                   </div>
-
-                  <div className="flex flex-col md:flex-row">
-                    <div className="md:w-1/4">
-                      <p className="text-gray-300 font-medium">Duration</p>
-                    </div>
-                    <div className="md:w-3/4">
-                      <p className="text-white">
-                        {new Date(entry.startDate).toLocaleDateString()} - {entry.endDate ? new Date(entry.endDate).toLocaleDateString() : 'Present'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {entry.description && (
-                    <div className="flex flex-col md:flex-row">
-                      <div className="md:w-1/4">
-                        <p className="text-gray-300 font-medium">Description</p>
-                      </div>
-                      <div className="md:w-3/4">
-                        <p className="text-white whitespace-pre-line">{entry.description}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Additional Info */}
-                  {getEntryAdditionalInfo(entry) && (
-                    <div className="flex flex-col md:flex-row">
-                      <div className="md:w-1/4">
-                        <p className="text-gray-300 font-medium">Details</p>
-                      </div>
-                      <div className="md:w-3/4">
-                        {getEntryAdditionalInfo(entry)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Attachments */}
-                  {entry.attachments && entry.attachments.length > 0 && (
-                    <div className="flex flex-col md:flex-row">
-                      <div className="md:w-1/4">
-                        <p className="text-gray-300 font-medium">Attachments</p>
-                      </div>
-                      <div className="md:w-3/4">
-                        <div className="flex flex-wrap gap-2">
-                          {entry.attachments.map((attachment, attIndex) => (
-                            <button
-                              key={attIndex}
-                              onClick={() => setSelectedAttachment(attachment)}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-3 w-3 mr-1"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                />
-                              </svg>
-                              Attachment {attIndex + 1}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
-            ))
-          ) : (
-            <p className="text-gray-400 text-center py-8">No entries found</p>
-          )}
-        </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row">
+                  <div className="md:w-1/4">
+                    <p className="text-gray-300 font-medium">Organization</p>
+                  </div>
+                  <div className="md:w-3/4">
+                    <p className="text-white">{entry.organization || entry.company}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row">
+                  <div className="md:w-1/4">
+                    <p className="text-gray-300 font-medium">Duration</p>
+                  </div>
+                  <div className="md:w-3/4">
+                    <p className="text-white">
+                      {new Date(entry.startDate).toLocaleDateString()} - {entry.endDate ? new Date(entry.endDate).toLocaleDateString() : 'Present'}
+                    </p>
+                  </div>
+                </div>
+
+                {entry.description && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Description</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <p className="text-white whitespace-pre-line">{entry.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional Info */}
+                {getEntryAdditionalInfo(entry) && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Details</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      {getEntryAdditionalInfo(entry)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attachments */}
+                {entry.attachments && entry.attachments.length > 0 && (
+                  <div className="flex flex-col md:flex-row">
+                    <div className="md:w-1/4">
+                      <p className="text-gray-300 font-medium">Attachments</p>
+                    </div>
+                    <div className="md:w-3/4">
+                      <div className="flex flex-wrap gap-2">
+                        {entry.attachments.map((attachment, attIndex) => (
+                          <button
+                            key={attIndex}
+                            onClick={() => setSelectedAttachment(attachment)}
+                            className="inline-flex items-center px-2 py-1 text-xs bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-3 w-3 mr-1"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                              />
+                            </svg>
+                            Attachment {attIndex + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-gray-400 text-center py-8">No entries found</p>
+        )}
       </div>
 
       {/* Add the modal component */}

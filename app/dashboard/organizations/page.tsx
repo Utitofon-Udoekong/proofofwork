@@ -91,8 +91,7 @@ export default function OrganizationPage() {
     address, 
     registerOrganization,
     approveVerificationRequest,
-    rejectVerificationRequest,
-    isLoading
+    rejectVerificationRequest
   } = useWeb3();
   const [formData, setFormData] = useState({
     name: '',
@@ -110,7 +109,7 @@ export default function OrganizationPage() {
   const { data: details, isLoading: loading, error: detailsError } = useOrganizationDetails(address || undefined);
 
   // Use the new hook for pending requests
-  const { data: pendingRequests = [], isLoading: loadingRequests, error: pendingError } = usePendingVerificationRequests();
+  const { data: pendingRequests = [], isLoading: loadingRequests } = usePendingVerificationRequests();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,9 +120,9 @@ export default function OrganizationPage() {
       setError(null);
       await registerOrganization(formData.name, formData.email, formData.website);
       // Query will refetch automatically on event
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error registering organization:', err);
-      setError(err.message || 'Failed to register organization');
+      setError(err instanceof Error ? err.message : 'Failed to register organization');
     } finally {
       setSubmitting(false);
     }
@@ -169,10 +168,10 @@ export default function OrganizationPage() {
       }
       // Refresh pending requests
       closeModal();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setModalLoading(false);
       console.error('Error handling request:', err);
-      setError(err.message || 'Failed to process request');
+      setError(err instanceof Error ? err.message : 'Failed to process request');
     }
   };
 

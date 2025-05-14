@@ -88,10 +88,10 @@ export default function FileUploader({
         // Notify the parent component with both the original file and data URL
         onFileUploaded(file, dataUrl);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error processing file:', error);
       if (onError) {
-        onError(error instanceof Error ? error : new Error(error?.message || 'Unknown error'));
+        onError(error instanceof Error ? error : new Error(error instanceof Error ? error.message : 'File upload failed'));
       }
     } finally {
       setIsProcessing(false);

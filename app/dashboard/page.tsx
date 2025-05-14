@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ResumeMetadata, ResumeEntry, EntryType } from "@/app/lib/types";
 import { useWeb3 } from "@/app/providers/Web3Provider";
 import DraftsList from "@/app/components/resume/DraftsList";
 import { useRouter } from "next/navigation";
@@ -10,6 +8,7 @@ import { useSortedDrafts } from "@/app/lib/stores/resumeDraftStore";
 import ResumeList from '@/app/components/ResumeList';
 import { useResumes } from '@/app/hooks/useResumes';
 import { parseError } from '@/app/lib/parseError';
+
 export default function DashboardPage() {
   const router = useRouter();
   const drafts = useSortedDrafts();
@@ -79,8 +78,8 @@ export default function DashboardPage() {
         <div className="bg-gray-800 p-8 rounded-lg shadow-md border border-gray-700">
           <h1 className="text-2xl font-bold mb-4 text-white">Create Your First Resume</h1>
           <p className="text-gray-300 mb-6">
-            You're connected to the blockchain, but you don't have any resume NFTs yet. 
-            Let's create your first blockchain resume!
+            You&apos;re connected to the blockchain, but you don&apos;t have any resume NFTs yet. 
+            Let&apos;s create your first blockchain resume!
           </p>
           
           <Link 
@@ -93,7 +92,7 @@ export default function DashboardPage() {
           <div className="mt-8 p-4 bg-blue-900/30 rounded-lg text-sm text-blue-300 border border-blue-900/50">
             <p className="font-medium">Having connection issues?</p>
             <p className="mt-1">
-              If you're experiencing problems with the blockchain connection, try refreshing the page.
+              If you&apos;re experiencing problems with the blockchain connection, try refreshing the page.
               If problems persist, check that your network is correctly set to Sepolia testnet.
             </p>
           </div>

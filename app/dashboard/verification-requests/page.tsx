@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { UserButton } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
-import { VerificationRequest } from "@/app/lib/types";
 import { useVerificationRequests } from '@/app/hooks/useVerificationRequests';
 
 export default function VerificationRequestsPage() {
@@ -11,7 +9,6 @@ export default function VerificationRequestsPage() {
     userAuthenticated, 
     walletConnected, 
     createWallet, 
-    isLoading
   } = useWeb3();
   
   // Use the new hook for verification requests
@@ -122,9 +119,7 @@ export default function VerificationRequestsPage() {
       {verificationRequests.length === 0 ? (
         <div className="bg-white p-8 rounded-lg shadow-sm text-center">
           <h2 className="text-xl font-medium mb-4">No Verification Requests</h2>
-          <p className="text-gray-600 mb-6">
-            You haven't requested verification for any of your resume entries yet.
-          </p>
+          <p className="text-gray-400 text-center py-4">You haven&apos;t requested verification for any of your resume entries yet.</p>
           <a 
             href="/dashboard"
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium inline-block"

@@ -86,8 +86,8 @@ export default function AdminPage() {
     try {
       await verifyOrganization(orgAddress);
       // No need to manually update orgs, event-driven invalidation will refetch
-    } catch (err: any) {
-      setTxError(err.message || "Failed to verify organization");
+    } catch (err: unknown) {
+      setTxError(err instanceof Error ? err.message : "Failed to verify organization");
     } finally {
       setTxLoading(null);
     }
@@ -98,8 +98,8 @@ export default function AdminPage() {
     setTxError(null);
     try {
       await revokeOrganization(orgAddress);
-    } catch (err: any) {
-      setTxError(err.message || "Failed to revoke organization");
+    } catch (err: unknown) {
+      setTxError(err instanceof Error ? err.message : "Failed to revoke organization");
     } finally {
       setTxLoading(null);
     }
@@ -110,8 +110,8 @@ export default function AdminPage() {
     setTxError(null);
     try {
       await removeOrganization(orgAddress);
-    } catch (err: any) {
-      setTxError(err.message || "Failed to remove organization");
+    } catch (err: unknown) {
+      setTxError(err instanceof Error ? err.message : "Failed to remove organization");
     } finally {
       setTxLoading(null);
     }

@@ -5,16 +5,9 @@ import { useUser } from "@civic/auth-web3/react";
 import { useAccount, useConnect } from "wagmi";
 import Link from "next/link";
 
-enum AuthStatus {
-  AUTHENTICATED = "authenticated",
-  UNAUTHENTICATED = "unauthenticated",
-  AUTHENTICATING = "authenticating",
-  ERROR = "error",
-  SIGNING_OUT = "signing_out"
-}
 export function CivicAuthButton() {
-  const { user, authStatus, isLoading, error, signIn, walletCreationInProgress, displayMode } = useUser();
-  const { address, isConnected, isConnecting } = useAccount();
+  const { user, isLoading, error, signIn, walletCreationInProgress } = useUser();
+  const { isConnected, isConnecting } = useAccount();
   const { connectors, connect } = useConnect();
   const userContext = useUser();
   const hasWallet = userHasWallet(userContext);

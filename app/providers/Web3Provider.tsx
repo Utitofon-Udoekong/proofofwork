@@ -8,7 +8,6 @@ import { userHasWallet } from "@civic/auth-web3";
 import { embeddedWallet } from "@civic/auth-web3/wagmi";
 import { CivicAuthProvider, useUser } from "@civic/auth-web3/react";
 import { useAccount, useConnect, useBalance, useReadContract, useSwitchChain, useDisconnect } from "wagmi";
-import { useAutoConnect } from "@civic/auth-web3/wagmi";
 import { ResumeMetadata } from '@/app/lib/types';
 import {
   ResumeNFT__factory,
@@ -711,7 +710,7 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
 
   const queryClient = useQueryClient();
 
-  useAppContractEvents((eventName, args, contract) => {
+  useAppContractEvents((eventName, logs, contract) => {
     if (contract === 'VerificationManager') {
       if (
         eventName === 'OrganizationAdded' ||

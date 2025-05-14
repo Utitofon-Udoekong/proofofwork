@@ -1,9 +1,8 @@
 // Utility to parse errors from contract calls and other sources
-export function parseError(error: any): string {
+export function parseError(error: unknown): string {
   if (!error) return "Unknown error occurred.";
 
-  // Wagmi/viem/ethers contract revert with custom error
-  if (typeof error.message === "string") {
+  if (hasMessage(error)) {
     // Custom contract error
     const match = error.message.match(/Error: ([A-Za-z0-9_]+)\(\)/);
     if (match) {
@@ -37,10 +36,18 @@ export function parseError(error: any): string {
   }
 
   // Viem/wagmi error cause
-  if (error.cause && typeof error.cause.message === "string") {
-    return parseError(error.cause);
+  if (hasCause(error) && hasMessage((error as { cause: unknown }).cause)) {
+    return parseError((error as { cause: unknown }).cause);
   }
 
   // Fallback
   return String(error);
+}
+
+function hasMessage(error: unknown): error is { message: string } {
+  return typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string';
+}
+
+function hasCause(error: unknown): error is { cause: unknown } {
+  return typeof error === 'object' && error !== null && 'cause' in error;
 } 

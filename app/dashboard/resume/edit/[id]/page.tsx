@@ -18,18 +18,6 @@ const entryTypeToString = (type: EntryTypeEnum): EntryType => {
   return mapping[type];
 };
 
-const stringToEntryType = (type: string): EntryTypeEnum => {
-  const mapping: Record<string, EntryTypeEnum> = {
-    'work': EntryTypeEnum.WORK,
-    'education': EntryTypeEnum.EDUCATION,
-    'certification': EntryTypeEnum.CERTIFICATION,
-    'project': EntryTypeEnum.PROJECT,
-    'skill': EntryTypeEnum.SKILL,
-    'award': EntryTypeEnum.AWARD
-  };
-  return mapping[type] || EntryTypeEnum.WORK;
-};
-
 // Add new type for file attachments
 type FileAttachment = {
   file: File;
@@ -334,20 +322,7 @@ export default function EditResumePage({ params }: { params: Promise<{ id: strin
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Website
-                </label>
-                <input
-                  type="url"
-                  value={resumeMetadata.profile.website}
-                  onChange={(e) => setResumeMetadata(prev => ({
-                    ...prev!,
-                    profile: { ...prev!.profile, website: e.target.value }
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Social Links
@@ -668,14 +643,7 @@ export default function EditResumePage({ params }: { params: Promise<{ id: strin
                   <span className="font-medium text-gray-900 dark:text-gray-100">Location:</span> {resumeMetadata.profile.location}
                 </div>
               )}
-              {resumeMetadata.profile.website && (
-                <div>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">Website:</span>{' '}
-                  <a href={resumeMetadata.profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-                    {resumeMetadata.profile.website}
-                  </a>
-                </div>
-              )}
+              
             </div>
             {Object.entries(resumeMetadata.profile.socialLinks || {}).length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">

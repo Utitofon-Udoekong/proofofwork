@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useResumeDraftStore, DraftAttachment, DraftResumeEntry } from '@/app/lib/stores/resumeDraftStore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWeb3 } from '@/app/providers/Web3Provider';
-import { EntryType, EntryTypeEnum, ProfileMetadata, ResumeEntry, ResumeMetadata } from '@/app/lib/types';
+import { EntryType, EntryTypeEnum, ProfileMetadata } from '@/app/lib/types';
 import FileUploader from '@/app/components/ui/FileUploader';
 import { useFormAutoSave } from '@/app/hooks/useAutoSave';
 import { IPFSService } from '@/app/lib/services/ipfs';
@@ -26,21 +26,6 @@ const entryTypeToString = (type: EntryTypeEnum): EntryType => {
   return mapping[type];
 };
 
-// Define a basic resume entry template
-const emptyEntry: ResumeEntry = {
-  id: '',
-  type: entryTypeToString(EntryTypeEnum.WORK),
-  title: '',
-  company: '',
-  description: '',
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: '',
-  verified: false,
-  organization: '',
-};
-
-
-
 // Helper function to convert string EntryType to EntryTypeEnum
 const stringToEntryType = (type: string): EntryTypeEnum => {
   const mapping: Record<string, EntryTypeEnum> = {
@@ -53,15 +38,6 @@ const stringToEntryType = (type: string): EntryTypeEnum => {
   };
   return mapping[type] || EntryTypeEnum.WORK;
 };
-
-const entryTypeOptions = [
-  { value: EntryTypeEnum.WORK, label: 'Work Experience' },
-  { value: EntryTypeEnum.EDUCATION, label: 'Education' },
-  { value: EntryTypeEnum.CERTIFICATION, label: 'Certification' },
-  { value: EntryTypeEnum.PROJECT, label: 'Project' },
-  { value: EntryTypeEnum.SKILL, label: 'Skill' },
-  { value: EntryTypeEnum.AWARD, label: 'Award' },
-];
 
 export default function CreateResumePage() {
   const router = useRouter();
@@ -76,15 +52,10 @@ export default function CreateResumePage() {
   const [storeActions] = useState({
     createDraft: store.createDraft,
     addEntry: store.addEntry,
-    updateEntry: store.updateEntry,
-    setActiveEntry: store.setActiveEntry,
-    drafts: store.drafts,
-    currentDraftId: store.currentDraftId,
-    serializeDraftForIPFS: store.serializeDraftForIPFS,
-    updateDraft: store.updateDraft
+    updateEntry: store.updateEntry
   });
 
-  const { createDraft, addEntry, updateEntry, setActiveEntry, drafts, currentDraftId, serializeDraftForIPFS, updateDraft } = storeActions;
+  const { createDraft, addEntry, updateEntry } = storeActions;
 
   // State for the resume form
   const [resumeName, setResumeName] = useState('My Professional Resume');
@@ -1341,7 +1312,7 @@ export default function CreateResumePage() {
                             <button
                               type="button"
                               onClick={() => {
-                                setAttachments(prev => prev.filter((_: any, i: number) => i !== index));
+                                setAttachments(prev => prev.filter((_: unknown, i: number) => i !== index));
                                 setEntryForms(prev => {
                                   const newForms = [...prev];
                                   newForms[activeFormIndex] = {
@@ -1404,7 +1375,7 @@ export default function CreateResumePage() {
 
               <div className="border-t border-gray-700 pt-4 mt-6">
                 <h3 className="text-md font-medium text-white mb-2">Ready to Continue?</h3>
-                <p className="text-gray-400 text-sm mb-3">Once you've added all your entries, preview your resume before saving.</p>
+                <p className="text-gray-400 text-sm mb-3">Once you&apos;ve added all your entries, preview your resume before saving.</p>
               </div>
             </div>
           </div>
@@ -1687,7 +1658,7 @@ export default function CreateResumePage() {
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 text-center py-8">No valid entries to display. Please add some entries.</p>
+              <p className="text-gray-400 text-center py-8">You haven&apos;t requested verification for any of your resume entries yet.</p>
             )}
           </div>
         </div>

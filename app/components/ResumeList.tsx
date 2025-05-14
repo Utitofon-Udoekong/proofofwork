@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useWeb3 } from '@/app/providers/Web3Provider';
-import { ResumeMetadata } from '@/app/lib/types';
 import Link from 'next/link';
+import { ResumeMetadata } from '@/app/lib/types';
 
 interface ResumeListProps {
   resumes: ResumeMetadata[];
@@ -49,7 +47,7 @@ export default function ResumeList({ resumes, isLoading, error }: ResumeListProp
           <p className="text-gray-300 mt-2">{resume.profile.bio}</p>
           {resume.profile.skills && resume.profile.skills.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
-              {resume.profile.skills.map((skill, index) => (
+              {resume.profile.skills.map((skill: string, index: number) => (
                 <span
                   key={index}
                   className="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm"

@@ -94,7 +94,8 @@ export interface ProfileMetadata {
   languages?: string[];
   socialLinks?: SocialLinks;
   lastUpdated: string; // ISO date string
-  [key: string]: any; // For future extensibility
+  email?: string;
+  phone?: string;
 }
 
 // Complete resume metadata structure with both profile and entries

@@ -63,7 +63,7 @@ export default function ProfilePage() {
     };
     
     loadUserData();
-  }, [userAuthenticated, walletConnected, tokenIds, civicUser.user]);
+  }, [userAuthenticated, walletConnected, tokenIds, civicUser.user, bio, getResumes, selectedResumeId, skills]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

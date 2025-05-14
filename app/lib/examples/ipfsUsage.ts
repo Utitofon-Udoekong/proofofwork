@@ -90,7 +90,7 @@ export async function uploadCertificatesExample(certificateFiles: File[]) {
  * Example function to create a complete resume with metadata and file
  */
 export async function createCompleteResume(
-  resumeMetadata: any,
+  resumeMetadata: unknown,
   resumeFile: File,
   certificateFiles: File[]
 ) {

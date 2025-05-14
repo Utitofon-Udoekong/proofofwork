@@ -11,7 +11,7 @@ import { useAccount } from 'wagmi';
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { address: wagmiAddress } = useWeb3();
-  const { user, authStatus } = useUser();
+  const { authStatus } = useUser();
   const userContext = useUser();
   const address = userHasWallet(userContext) ? userContext.ethereum.address : wagmiAddress;
   const pathname = usePathname();

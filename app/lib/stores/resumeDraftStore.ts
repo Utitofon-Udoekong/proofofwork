@@ -116,7 +116,7 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
           const entries = Array.isArray(draft.entries) ? draft.entries : [];
           // Ensure attachments is always DraftAttachment[]
           let attachments: DraftAttachment[] = [];
-          if (Array.isArray(entry.attachments) && entry.attachments.length > 0 && entry.attachments.every(att => typeof att === 'object' && 'data' in att)) {
+          if (Array.isArray(entry.attachments) && entry.attachments.length > 0 && entry.attachments.every((att: unknown) => typeof att === 'object' && att !== null && 'data' in att)) {
             attachments = entry.attachments as DraftAttachment[];
           } else {
             attachments = [];
@@ -143,7 +143,7 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
           const updatedEntries = [...entries];
           // Ensure attachments is always DraftAttachment[]
           let attachments: DraftAttachment[] = updatedEntries[entryIndex].attachments || [];
-          if (Array.isArray(updates.attachments) && updates.attachments.length > 0 && updates.attachments.every(att => typeof att === 'object' && 'data' in att)) {
+          if (Array.isArray(updates.attachments) && updates.attachments.length > 0 && updates.attachments.every((att: unknown) => typeof att === 'object' && att !== null && 'data' in att)) {
             attachments = updates.attachments as DraftAttachment[];
           } else {
             attachments = [];
@@ -306,7 +306,7 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
           }
         }));
         // Remove UI-only fields from draft
-        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft as any;
+        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft as { [key: string]: unknown };
         // Set processed entries (with string[] attachments) for minting only
         const result: ResumeMetadata = {
           ...resumeMetadata,
