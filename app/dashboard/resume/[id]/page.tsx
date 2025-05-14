@@ -11,28 +11,32 @@ import Image from 'next/image';
 
 // Modal component for attachments
 function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onClose: () => void; attachment: string }) {
-  if (!isOpen) return null;
-
   const gatewayUrl = ipfsService.getHttpUrl(attachment);
   const [contentType, setContentType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkContentType = async () => {
-      try {
-        const response = await fetch(gatewayUrl, { method: 'HEAD' });
-        const contentType = response.headers.get('content-type');
-        setContentType(contentType);
-      } catch (err) {
-        console.error('Error checking content type:', err);
-        setError('Failed to load content');
-      }
-    };
-
-    if (gatewayUrl) {
+    // Only run the effect if the modal is open and gatewayUrl is present
+    if (isOpen && gatewayUrl) {
+      const checkContentType = async () => {
+        try {
+          const response = await fetch(gatewayUrl, { method: 'HEAD' });
+          const contentTypeHeader = response.headers.get('content-type');
+          setContentType(contentTypeHeader);
+        } catch (err) {
+          console.error('Error checking content type:', err);
+          setError('Failed to load content');
+        }
+      };
       checkContentType();
+    } else if (!isOpen) {
+      // Reset state when modal is closed
+      setContentType(null);
+      setError(null);
     }
-  }, [gatewayUrl]);
+  }, [isOpen, gatewayUrl]); // Add isOpen to dependencies
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -339,7 +343,7 @@ export default function ResumeViewPage({ params }: { params: Promise<{ id: strin
   const [verificationLoading, setVerificationLoading] = useState(false);
 
   // Use the new hook for organizations
-  const { data: organizations = [], isLoading: orgsLoading, error: orgsError } = useOrganizations();
+  const { data: organizations = []} = useOrganizations();
 
   useEffect(() => {
     const fetchData = async () => {

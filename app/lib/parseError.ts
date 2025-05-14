@@ -45,7 +45,7 @@ export function parseError(error: unknown): string {
 }
 
 function hasMessage(error: unknown): error is { message: string } {
-  return typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string';
+  return typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message: unknown }).message === 'string';
 }
 
 function hasCause(error: unknown): error is { cause: unknown } {

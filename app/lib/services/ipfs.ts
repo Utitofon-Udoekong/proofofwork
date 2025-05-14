@@ -1,5 +1,5 @@
 import { create, Client } from '@web3-storage/w3up-client';
-import { ResumeMetadata, ProfileMetadata } from '../types';
+import { ResumeMetadata } from '../types';
 
 // You should add these to .env.local file
 const WEB3_STORAGE_EMAIL = process.env.NEXT_PUBLIC_WEB3_STORAGE_EMAIL || '';
@@ -34,8 +34,7 @@ export class IPFSService {
       try {
         this.web3StorageClient = await create();
         this.initialized = true;
-        console.log('Web3.Storage client initialized');
-      } catch (error) {
+              } catch (error) {
         console.error('Failed to initialize Web3.Storage client:', error);
         this.initialized = false;
         return;
@@ -48,32 +47,26 @@ export class IPFSService {
     }
 
     try {
-      console.log('Initializing Web3.Storage client');
-      // Login with email address to authenticate agent
-      console.log('Logging in with email:', WEB3_STORAGE_EMAIL);
-      const email = WEB3_STORAGE_EMAIL as `${string}@${string}`;
+            // Login with email address to authenticate agent
+            const email = WEB3_STORAGE_EMAIL as `${string}@${string}`;
       const account = await this.web3StorageClient.login(email);
-      console.log('Login successful');
-
+      
       // Wait for a payment plan with a 15-minute timeout
       try {
         await account.plan.wait();
-        console.log('Payment plan confirmed');
-      } catch (planError) {
+              } catch (planError) {
         console.warn('Plan wait timed out or failed:', planError);
       }
       // Try to get existing spaces or create a new one
       const spaces = this.web3StorageClient.spaces();
       if (spaces.length > 0) {
         await this.web3StorageClient.setCurrentSpace(spaces[0].did());
-        console.log('Using existing space:', spaces[0].did());
-        this.spaceProvisioned = true;
+                this.spaceProvisioned = true;
       } else {
         try {
           const space = await this.web3StorageClient.createSpace('proofofwork-space', { account });
           await this.web3StorageClient.setCurrentSpace(space.did());
-          console.log('New space created and associated with account:', space.did());
-          this.spaceProvisioned = true;
+                    this.spaceProvisioned = true;
         } catch (createError) {
           console.error('Error creating space:', createError);
         }

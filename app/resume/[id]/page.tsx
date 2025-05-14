@@ -12,8 +12,6 @@ function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onC
   const [contentType, setContentType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   useEffect(() => {
     const checkContentType = async () => {
       try {
@@ -30,6 +28,8 @@ function AttachmentModal({ isOpen, onClose, attachment }: { isOpen: boolean; onC
       checkContentType();
     }
   }, [gatewayUrl]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">

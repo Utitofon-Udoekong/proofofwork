@@ -1,15 +1,10 @@
 'use client';
 
 import { CivicAuthButton } from '@/app/components/auth/CivicAuthButton';
-import { useUser } from "@civic/auth-web3/react";
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
 import Navbar from './components/Navbar';
 
 export default function Home() {
-  const { user, authStatus } = useUser();
-  const { isConnected: wagmiConnected, isConnecting, isReconnecting } = useAccount();
-  const isConnected = authStatus === 'authenticated' && wagmiConnected && !isConnecting && !isReconnecting;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">

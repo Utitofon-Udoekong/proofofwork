@@ -14,11 +14,19 @@ export default function DashboardLayout({
   const router = useRouter();
   const { logout, walletConnected, userAuthenticated, address } = useWeb3();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    const success = await logout();
-    if (success) {
-      router.replace('/');
+    setIsLoggingOut(true);
+    try {
+      const success = await logout();
+      if (success) {
+        router.replace('/');
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -102,10 +110,10 @@ export default function DashboardLayout({
       <div className="p-4 border-t border-gray-700">
         <button
           onClick={handleLogout}
-          disabled={!walletConnected || !userAuthenticated}
+          disabled={!walletConnected || !userAuthenticated || isLoggingOut}
           className="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
         >
-          Logout
+          {isLoggingOut ? "Logging out..." : "Logout"}
         </button>
       </div>
     </>

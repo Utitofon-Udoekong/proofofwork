@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { ResumeMetadata, ResumeEntry, ProfileMetadata } from '../types';
+import { ResumeMetadata, ResumeEntry } from '../types';
 
 // Define a DraftResumeEntry for use in drafts (attachments are DraftAttachment[])
 export type DraftResumeEntry = Omit<ResumeEntry, 'attachments'> & { attachments?: DraftAttachment[] };
@@ -52,25 +52,32 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       createDraft: (tokenId, name, initialDraft) => {
         const draftId = generateId();
         const now = new Date().toISOString();
+        const defaultName = name || `Draft Resume ${Object.keys(get().drafts).length + 1}`;
+        
+        // Create a properly typed draft object
+        const newDraft: ResumeDraft = {
+          name: defaultName,
+          version: (initialDraft?.version || '1.0'),
+          resumeId: '', // Required field
+          profile: {
+            name: defaultName,
+            lastUpdated: now,
+            ...(initialDraft?.profile || {})
+          },
+          entries: initialDraft?.entries || [],
+          chainId: initialDraft?.chainId || 0, // Default chainId
+          createdAt: now,
+          updatedAt: now,
+          tokenId: tokenId,
+          activeEntryIndex: null,
+          // Add remaining fields from initialDraft that match ResumeDraft type
+          ...(initialDraft || {})
+        };
+
         set((state) => ({
           drafts: {
             ...state.drafts,
-            [draftId]: {
-              name: name || `Draft Resume ${Object.keys(state.drafts).length + 1}`,
-              version: (initialDraft && initialDraft.version) || '1.0',
-              profile: initialDraft?.profile || {
-                name: name || `Draft Resume ${Object.keys(state.drafts).length + 1}`,
-                lastUpdated: now,
-              },
-              entries: initialDraft?.entries || [],
-              chainId: initialDraft?.chainId,
-              createdAt: now,
-              updatedAt: now,
-              tokenId: tokenId,
-              activeEntryIndex: null,
-              // Add any other fields from initialDraft
-              ...initialDraft,
-            }
+            [draftId]: newDraft
           },
           currentDraftId: draftId
         }));
@@ -204,7 +211,8 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
 
       deleteDraft: (draftId) => {
         set((state) => {
-          const { [draftId]: _, ...remainingDrafts } = state.drafts;
+          const remainingDrafts = { ...state.drafts };
+          delete remainingDrafts[draftId];
           return {
             drafts: remainingDrafts,
             currentDraftId: state.currentDraftId === draftId ? null : state.currentDraftId
@@ -275,7 +283,7 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       processAttachmentsForMint: async (draftId) => {
         const draft = get().drafts[draftId];
         if (!draft) return null;
-        // Prepare new entries array for the final ResumeMetadata (do not mutate draft)
+        
         const processedEntries: ResumeEntry[] = await Promise.all((draft.entries || []).map(async (entry) => {
           if (Array.isArray(entry.attachments) && entry.attachments.length > 0) {
             const ipfsUrls: string[] = [];
@@ -290,28 +298,32 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
                   u8arr[n] = bstr.charCodeAt(n);
                 }
                 const file = new File([u8arr], att.name, { type: mime });
-                // Upload to IPFS
-                // @ts-ignore
                 const url = await import('../services/ipfs').then(m => m.ipfsService.uploadFile(file));
                 ipfsUrls.push(url);
               }
             }
-            // Return entry with attachments as string[] (for minting only)
-            const { attachments, ...rest } = entry;
-            return { ...rest, attachments: ipfsUrls } as ResumeEntry;
+            return { ...entry, attachments: ipfsUrls } as ResumeEntry;
           } else {
-            // No attachments or already processed
-            const { attachments, ...rest } = entry;
-            return { ...rest, attachments: [] } as ResumeEntry;
+            return { ...entry, attachments: [] } as ResumeEntry;
           }
         }));
-        // Remove UI-only fields from draft
-        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft as { [key: string]: unknown };
-        // Set processed entries (with string[] attachments) for minting only
+
+        // Directly construct the ResumeMetadata object, omitting tokenId and activeEntryIndex
         const result: ResumeMetadata = {
-          ...resumeMetadata,
-          entries: processedEntries
+          resumeId: draft.resumeId,
+          name: draft.name,
+          version: draft.version,
+          profile: draft.profile,
+          entries: processedEntries, // Use the processed entries
+          chainId: draft.chainId,
+          createdAt: draft.createdAt,
+          updatedAt: draft.updatedAt,
+          // Conditionally add optional fields from draft if they exist
+          ...(draft.description && { description: draft.description }),
+          ...(draft.image && { image: draft.image }),
+          ...(draft.transactionHash && { transactionHash: draft.transactionHash }),
         };
+
         return result;
       },
 
@@ -319,9 +331,25 @@ export const useResumeDraftStore = create<ResumeDraftsState>()(
       serializeDraftForIPFS: (draftId) => {
         const draft = get().drafts[draftId];
         if (!draft) return null;
-        // Remove UI-only fields
-        const { tokenId, activeEntryIndex, ...resumeMetadata } = draft;
-        return resumeMetadata as ResumeMetadata;
+
+        // Directly construct the ResumeMetadata object, omitting tokenId and activeEntryIndex
+        // Note: draft.entries are DraftResumeEntry[], ResumeMetadata expects ResumeEntry[].
+        // This was previously hidden by a broader cast. Making the cast explicit on entries.
+        const result: ResumeMetadata = {
+          resumeId: draft.resumeId,
+          name: draft.name,
+          version: draft.version,
+          profile: draft.profile,
+          entries: draft.entries as unknown as ResumeEntry[], // Explicit cast for entries
+          chainId: draft.chainId,
+          createdAt: draft.createdAt,
+          updatedAt: draft.updatedAt,
+          // Conditionally add optional fields from draft if they exist
+          ...(draft.description && { description: draft.description }),
+          ...(draft.image && { image: draft.image }),
+          ...(draft.transactionHash && { transactionHash: draft.transactionHash }),
+        };
+        return result;
       },
     }),
     {

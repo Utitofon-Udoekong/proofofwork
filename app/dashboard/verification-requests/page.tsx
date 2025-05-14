@@ -14,14 +14,6 @@ export default function VerificationRequestsPage() {
   // Use the new hook for verification requests
   const { data: verificationRequests = [], isLoading: loading, error } = useVerificationRequests();
 
-  const handleCancelRequest = async (requestId: number) => {
-    // In a real implementation, this would call a contract method
-    if (confirm("Are you sure you want to cancel this verification request?")) {
-      // Mock implementation - just update the UI
-      // verificationRequests.filter(req => req.id !== requestId);
-    }
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -169,14 +161,14 @@ export default function VerificationRequestsPage() {
                         {getStatusBadge(request.status)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {request.status === 'pending' && (
+                        {/* {request.status === 'pending' && (
                           <button
                             onClick={() => handleCancelRequest(request.id)}
                             className="text-red-400 hover:text-red-600"
                           >
                             Cancel
                           </button>
-                        )}
+                        )} */}
                         {request.status === 'approved' && (
                           <span className="text-green-400">
                             Verified on {new Date(request.timestamp * 1000).toLocaleDateString()}

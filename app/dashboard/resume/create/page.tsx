@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useResumeDraftStore, DraftAttachment, DraftResumeEntry } from '@/app/lib/stores/resumeDraftStore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWeb3 } from '@/app/providers/Web3Provider';
@@ -39,7 +39,8 @@ const stringToEntryType = (type: string): EntryTypeEnum => {
   return mapping[type] || EntryTypeEnum.WORK;
 };
 
-export default function CreateResumePage() {
+// This is the new component containing the original logic
+function CreateResumeFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlDraftId = searchParams.get('draftId');
@@ -187,20 +188,17 @@ export default function CreateResumePage() {
       const draft = drafts[urlDraftId];
 
       if (draft) {
-        console.log("Loading draft:", JSON.stringify(draft, null, 2)); // Debug log
-        setDraftId(urlDraftId);
+                setDraftId(urlDraftId);
         setIsDraftMode(true);
 
         // Load draft data
         if (draft.name) {
           setResumeName(draft.name);
-          console.log("Set resume name to:", draft.name);
-        }
+                  }
 
         // Update profile data if available
         if (draft.profile) {
-          console.log("Setting profile data from draft:", JSON.stringify(draft.profile, null, 2));
-
+          
           // Create a new object with all the profile fields
           const profileUpdate = {
             name: draft.profile.name || '',
@@ -218,15 +216,13 @@ export default function CreateResumePage() {
             languages: draft.profile.languages ? [...draft.profile.languages] : []
           };
 
-          console.log("Setting profile data to:", profileUpdate);
-          setProfileData(profileUpdate);
+                    setProfileData(profileUpdate);
         }
 
         // If the draft has entries, load them for editing
         const draftEntries = Array.isArray(draft.entries) ? draft.entries : [];
         if (draftEntries.length > 0) {
-          console.log("Setting entries from draft:", draftEntries.length);
-          // Deep copy the entries to avoid reference issues
+                    // Deep copy the entries to avoid reference issues
           const entriesCopy: DraftResumeEntry[] = draftEntries.map(entry => ({ ...entry, attachments: Array.isArray(entry.attachments) ? entry.attachments : [] }));
           setEntryForms(entriesCopy);
           setActiveFormIndex(0);
@@ -313,8 +309,7 @@ export default function CreateResumePage() {
       lastUpdated: new Date().toISOString()
     };
 
-    console.log("Saving profile data to draft:", completeProfileData);
-
+    
     // Create a new draft or update existing one
     if (!draftId) {
       const newDraftId = createDraft(undefined, resumeName);
@@ -331,8 +326,7 @@ export default function CreateResumePage() {
         updatedAt: new Date().toISOString()
       };
 
-      console.log("Creating new draft with data:", draftUpdate);
-
+      
       useResumeDraftStore.getState().updateDraft(newDraftId, draftUpdate);
       setSuccessMessage('Draft created successfully!');
     } else {
@@ -344,8 +338,7 @@ export default function CreateResumePage() {
         updatedAt: new Date().toISOString()
       };
 
-      console.log("Updating draft with data:", draftUpdate);
-
+      
       useResumeDraftStore.getState().updateDraft(draftId, draftUpdate);
       setSuccessMessage('Draft updated successfully!');
     }
@@ -355,7 +348,7 @@ export default function CreateResumePage() {
   const handleSubmitEntryToDraft = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // If we're not in draft mode, create a draft first
+    // If we\'re not in draft mode, create a draft first
     if (!isDraftMode) {
       handleCreateDraft();
       return;
@@ -467,8 +460,7 @@ export default function CreateResumePage() {
           lastUpdated: new Date().toISOString()
         };
 
-        console.log("Updating draft with entries and profile:", JSON.stringify(draftUpdate, null, 2));
-        useResumeDraftStore.getState().updateDraft(draftId, draftUpdate);
+                useResumeDraftStore.getState().updateDraft(draftId, draftUpdate);
 
         // Show success message
         setLastSavedEntry(new Date());
@@ -478,7 +470,7 @@ export default function CreateResumePage() {
         // Set success message
         setSuccessMessage("Entries added successfully!");
 
-        // Don't reset forms when adding new entries - keep current form data
+        // Don\'t reset forms when adding new entries - keep current form data
       }
     } finally {
       setIsSavingEntry(false);
@@ -629,23 +621,20 @@ export default function CreateResumePage() {
           
           // Use processAttachmentsForMint to upload attachments and get mint-ready metadata
           const resumeMetadata = await useResumeDraftStore.getState().processAttachmentsForMint(draftId);
-          console.log("Resume metadata:", resumeMetadata);
-          if (!resumeMetadata) {
+                    if (!resumeMetadata) {
             throw new Error('Failed to process attachments for minting');
           }
 
           // Upload the metadata to IPFS
           setUploadProgress(50);
           const ipfsUri = await ipfsService.uploadResumeMetadata(resumeMetadata);
-          console.log("Resume metadata uploaded to IPFS:", ipfsUri);
-          
+                    
           // Start minting process
           setIsUploadingAttachments(false);
           setIsMinting(true);
           setUploadProgress(75);
           
-          console.log("Creating new resume");
-          const txHash = await createNewResume(resumeName, ipfsUri);
+                    const txHash = await createNewResume(resumeName, ipfsUri);
           if (txHash) {
             setTransactionHash(txHash);
             useResumeDraftStore.getState().deleteDraft(draftId);
@@ -1463,7 +1452,7 @@ export default function CreateResumePage() {
 
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden mb-6">
           <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-bold text-white">{resumeName}</h2>
+            <h2 className="text-xl font-semibold text-white">{resumeName}</h2>
             <p className="text-gray-400 mt-1">{address}</p>
           </div>
 
@@ -1658,7 +1647,7 @@ export default function CreateResumePage() {
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 text-center py-8">You haven&apos;t requested verification for any of your resume entries yet.</p>
+              <p className="text-gray-400 text-center py-8">You have not requested verification for any of your resume entries yet.</p>
             )}
           </div>
         </div>
@@ -1720,7 +1709,7 @@ export default function CreateResumePage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-400"></div>
               </div>
               <p className="text-gray-300 mb-2">Minting your resume NFT...</p>
-              <p className="text-sm text-gray-400">This may take a few moments. Please don't close this window.</p>
+              <p className="text-sm text-gray-400">This may take a few moments. Please do not close this window.</p>
             </div>
           )}
 
@@ -1786,4 +1775,13 @@ export default function CreateResumePage() {
 
   // Fallback
   return null;
+}
+
+// The default export is now a wrapper that uses Suspense
+export default function CreateResumePage() {
+  return (
+    <Suspense fallback={<div className="max-w-4xl mx-auto p-6 text-white text-center">Loading page...</div>}>
+      <CreateResumeFormContent />
+    </Suspense>
+  );
 } 

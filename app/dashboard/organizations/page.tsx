@@ -2,30 +2,8 @@
 
 import { useWeb3 } from '@/app/providers/Web3Provider';
 import { useEffect, useState } from 'react';
-import Link from "next/link";
 import { usePendingVerificationRequests } from '@/app/hooks/usePendingVerificationRequests';
 import { useOrganizationDetails } from '@/app/hooks/useOrganizationDetails';
-
-interface OrganizationStatus {
-  name: string;
-  email: string;
-  website: string;
-  isVerified: boolean;
-  verificationTimestamp: number;
-  lastUpdateTimestamp: number;
-  exists: boolean;
-}
-
-interface VerificationRequest {
-  id: number;
-  user: string;
-  resumeId: number;
-  entryId: string;
-  details: string;
-  status: 'pending' | 'approved' | 'rejected';
-  timestamp: number;
-  verificationDetails: string;
-}
 
 function RequestActionModal({
   isOpen,
@@ -195,7 +173,7 @@ export default function OrganizationPage() {
     );
   }
 
-  if (!details || !details[6]) { // details[6] is 'exists'
+  if (!details || !details.exists) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <h1 className="text-2xl font-bold text-white mb-6">Register Organization</h1>
@@ -261,13 +239,13 @@ export default function OrganizationPage() {
 
   // Use details for status rendering
   const status = {
-    name: details[0],
-    email: details[1],
-    website: details[2],
-    isVerified: details[3],
-    verificationTimestamp: Number(details[4]),
-    lastUpdateTimestamp: Number(details[5]),
-    exists: details[6],
+    name: details?.name || '',
+    email: details?.email || '',
+    website: details?.website || '',
+    isVerified: details?.isVerified || false,
+    verificationTimestamp: details?.verificationTimestamp || 0,
+    lastUpdateTimestamp: details?.lastUpdateTimestamp || 0,
+    exists: details?.exists || false,
   };
 
   return (

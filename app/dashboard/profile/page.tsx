@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserButton, useUser } from "@civic/auth-web3/react";
 import { useWeb3 } from "@/app/providers/Web3Provider";
-import { ResumeMetadata } from "@/app/lib/types";
+import { useResumes } from "@/app/hooks/useResumes";
 
 export default function ProfilePage() {
   // Use our combined Web3Provider
@@ -13,10 +13,8 @@ export default function ProfilePage() {
     address, 
     balance,
     tokenIds,
-    getResumes
   } = useWeb3();
-  console.log("tokenIds", tokenIds);
-  // Get user data from Civic Auth
+    // Get user data from Civic Auth
   const civicUser = useUser();
   
   // Form state
@@ -30,7 +28,7 @@ export default function ProfilePage() {
   
   // Add state for selected resume
   const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null);
-  const [resumes, setResumes] = useState<ResumeMetadata[]>([]);
+  const { data: resumes = []} = useResumes();
   // Load user data
   useEffect(() => {
     const loadUserData = async () => {
@@ -48,8 +46,6 @@ export default function ProfilePage() {
         // Load stats from blockchain
         if (walletConnected) {
           try {
-            const resumes = await getResumes();
-            setResumes(resumes);
             // Set initial selected resume if available
             if (resumes.length > 0 && !selectedResumeId) {
               setSelectedResumeId(resumes[0].tokenId || null);
@@ -63,7 +59,7 @@ export default function ProfilePage() {
     };
     
     loadUserData();
-  }, [userAuthenticated, walletConnected, tokenIds, civicUser.user, bio, getResumes, selectedResumeId, skills]);
+  }, [userAuthenticated, walletConnected, tokenIds, civicUser.user, resumes, bio, selectedResumeId, skills]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,16 +69,6 @@ export default function ProfilePage() {
     try {
       // Simulate API call with a timeout
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In a real implementation, this would send data to backend/ipfs
-      console.log("Profile saved:", {
-        name,
-        email,
-        bio,
-        skills,
-        profileVisible,
-        walletAddress: address
-      });
       
       setSaveSuccess(true);
     } catch (error) {
