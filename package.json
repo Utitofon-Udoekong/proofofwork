@@ -6,14 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "contracts:clean": "cd contract-create && npm run clean",
-    "contracts:deploy": "cd contract-create && npm run deploy",
-    "contracts:deploy:registry": "cd contract-create && npm run deploy:registry",
-    "contracts:deploy:resume": "cd contract-create && npm run deploy:resume",
-    "contracts:compile": "cd contract-create && npm run compile",
-    "contracts:test": "cd contract-create && npm run test",
-    "contracts:addresses": "cd contract-create && npm run addresses"
+    "lint": "next lint"
   },
   "dependencies": {
     "@civic/auth": "^0.5.4",
@@ -27,7 +20,6 @@
     "ethers": "^6.14.0",
     "hardhat": "2.23.0",
     "next": "15.3.1",
-    "nft.storage": "^7.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "viem": "^2.29.1",

@@ -2,10 +2,10 @@
 import { ContractAddresses } from '../types';
 
 export const contractAddresses: ContractAddresses = {
-  "verificationManager": "0xD8F1D09cCA23aF51861452C71b7DfBc993c444fA",
-  "resumeNFT": "0xfb09284dC8758E59DCf5d6529Bf906f012941369",
+  "verificationManager": "0x5f26f8FaF2842FF674B0185151BcbdecAA8DDFE2",
+  "resumeNFT": "0xbBb3940C4A47D829D800eCAfC671F5744a467c09",
   "networkName": "sepolia",
-  "deploymentTimestamp": "2025-05-14T22:24:26.997Z"
+  "deploymentTimestamp": "2025-05-15T10:55:38.666Z"
 };
 
 export default contractAddresses;

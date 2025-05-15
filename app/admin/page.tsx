@@ -121,6 +121,7 @@ export default function AdminPage() {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <AdminNavbar />
         <h1 className="text-3xl font-bold text-white mb-6">Admin Login</h1>
         <button
           onClick={() => connect({ connector: metaMask() })}
@@ -135,7 +136,8 @@ export default function AdminPage() {
 
   if (!isOwner) {
     return (
-      <div className="max-w-md mx-auto mt-20 bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
+      
+      <div className="mx-auto mt-20 bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
         <h1 className="text-2xl font-bold text-white mb-4">Admin Access Required</h1>
         <p className="text-gray-300">You must be connected as the contract owner to access this page.</p>
         <button
