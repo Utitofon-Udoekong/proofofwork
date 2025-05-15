@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   env: {
     contractOwnerAddress: process.env.CONTRACT_OWNER_ADDRESS,
     sepoliaAlchemyApiKey: process.env.SEPOLIA_ALCHEMY_API_KEY,
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.ipfs.w3s.link',
+      },
+    ],
   }
 };
 

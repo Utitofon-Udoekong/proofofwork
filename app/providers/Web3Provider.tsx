@@ -352,15 +352,25 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Memoized getResumeById
-  const getResumeById = useCallback(async (resumeId: string): Promise<ResumeMetadata | null> => {
+  const getResumeById = async (resumeId: string): Promise<ResumeMetadata | null> => {
     try {
-      const resume = await getResumes().then(resumes => resumes.find(r => r.tokenId === resumeId));
-      return resume || null;
+      const tokenURI = await readContract(wagmiConfig, {
+        address: contractAddresses.resumeNFT as `0x${string}`,
+        abi: ResumeNFT__factory.abi,
+        functionName: 'tokenURI',
+        args: [BigInt(resumeId)],
+        chainId: sepolia.id,
+      });
+      const metadata = await ipfsService.getResumeMetadata(tokenURI);
+      if (metadata) {
+        metadata.tokenId = resumeId;
+        return metadata;
+      }
+      return null;
     } catch (error) {
       throw new Error(parseError(error));
     }
-  }, [getResumes]);
+  };
 
   // Memoized getVerificationStatus
   const getVerificationStatus = useCallback(async (resumeId: string, entryId: string): Promise<{ status: 'pending' | 'approved' | 'rejected' | 'none'; details?: string; timestamp?: number }> => {
