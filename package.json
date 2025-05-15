@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "contracts:clean": "cd contract-create && npm run clean",
+    "contracts:deploy": "cd contract-create && npm run deploy",
+    "contracts:deploy:registry": "cd contract-create && npm run deploy:registry",
+    "contracts:deploy:resume": "cd contract-create && npm run deploy:resume",
+    "contracts:compile": "cd contract-create && npm run compile",
+    "contracts:test": "cd contract-create && npm run test",
+    "contracts:addresses": "cd contract-create && npm run addresses"
   },
   "dependencies": {
     "@civic/auth": "^0.5.4",
