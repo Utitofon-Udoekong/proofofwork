@@ -427,7 +427,7 @@ export default function PublicResumePage({ params }: { params: Promise<{ id: str
           {/* Resume Entries */}
           {resume.entries && resume.entries.length > 0 ? (
             resume.entries.map((entry, index) => (
-              <div key={index} className="mb-8 last:mb-0 border-b border-gray-700 last:border-b-0">
+              <div key={index} className="mb-8 p-6 last:mb-0 border-b border-gray-700 last:border-b-0">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-2">
                     {getEntryTypeIcon(entry.type)}
