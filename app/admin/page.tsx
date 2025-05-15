@@ -16,7 +16,7 @@ const AdminNavbar = () => {
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
   const router = useRouter();
-  
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -29,7 +29,7 @@ const AdminNavbar = () => {
 
   return (
     <nav className="bg-gray-800 border-b border-gray-700 mb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/admin" className="flex items-center">
@@ -80,7 +80,7 @@ export default function AdminPage() {
 
   // Admin actions
   const handleVerify = async (orgAddress: string) => {
-    
+
     setTxLoading(orgAddress);
     setTxError(null);
     try {
@@ -120,9 +120,9 @@ export default function AdminPage() {
   // UI
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="w-full bg-gray-900">
         <AdminNavbar />
-        <h1 className="text-3xl font-bold text-white mb-6">Admin Login</h1>
+        <h1 className="text-3xl font-bold text-white my-6">Admin Login</h1>
         <button
           onClick={() => connect({ connector: metaMask() })}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded text-lg"
@@ -136,24 +136,27 @@ export default function AdminPage() {
 
   if (!isOwner) {
     return (
-      
-      <div className="mx-auto mt-20 bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
-        <h1 className="text-2xl font-bold text-white mb-4">Admin Access Required</h1>
-        <p className="text-gray-300">You must be connected as the contract owner to access this page.</p>
-        <button
-          onClick={() => disconnect()}
-          className="mt-4 bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
-        >
-          Disconnect
-        </button>
+
+      <div className="w-full bg-gray-900">
+        <AdminNavbar />
+        <div className="mx-auto mt-20 bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
+          <h1 className="text-2xl font-bold text-white mb-4">Admin Access Required</h1>
+          <p className="text-gray-300">You must be connected as the contract owner to access this page.</p>
+          <button
+            onClick={() => disconnect()}
+            className="mt-4 bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
+          >
+            Disconnect
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-200">
+    <div className="bg-gray-900 text-gray-200">
       <AdminNavbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="w-full mx-auto">
 
           <h1 className="text-2xl font-bold text-white mb-6">Admin: Organization Moderation</h1>

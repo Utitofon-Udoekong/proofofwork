@@ -109,7 +109,7 @@ export default function VerificationRequestsPage() {
       <h1 className="text-3xl font-bold mb-8">Verification Requests</h1>
       
       {verificationRequests.length === 0 ? (
-        <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-sm text-center">
           <h2 className="text-xl font-medium mb-4">No Verification Requests</h2>
           <p className="text-gray-400 text-center py-4">You haven&apos;t requested verification for any of your resume entries yet.</p>
           <a 
