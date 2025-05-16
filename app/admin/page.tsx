@@ -1,14 +1,13 @@
 "use client";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { metaMask } from "wagmi/connectors";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useUser } from "@civic/auth-web3/react";
 import { embeddedWallet } from "@civic/auth-web3/wagmi";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWeb3 } from "../providers/Web3Provider";
 import { useOrganizations } from '@/app/hooks/useOrganizations';
-import { parseError } from '@/app/lib/parseError';
 // Contract owner address
 const OWNER_ADDRESS = process.env.contractOwnerAddress?.toLowerCase();
 
@@ -73,9 +72,8 @@ const AdminNavbar = () => {
   );
 }
 
-function parseUserFriendlyError(error: any): { message: string, details?: string } {
+function parseUserFriendlyError(error: unknown): { message: string, details?: string } {
   if (!error) return { message: "Unknown error" };
-  // Try to extract a user-friendly message
   let msg = "";
   let details = "";
   if (typeof error === "string") {
@@ -87,35 +85,35 @@ function parseUserFriendlyError(error: any): { message: string, details?: string
       msg = error;
       details = error;
     }
-  } else if (typeof error === "object") {
-    msg = error.message || error.reason || error.code || "Unknown error";
+  } else if (typeof error === "object" && error !== null) {
+    // Try to extract common error fields
+    const errObj = error as Record<string, any>;
+    msg = errObj.message || errObj.reason || errObj.code || "Unknown error";
     details = JSON.stringify(error, null, 2);
-    // Try to extract nested message
-    if (error.body) {
+    if (errObj.body) {
       try {
-        const body = JSON.parse(error.body);
+        const body = JSON.parse(errObj.body);
         if (body && body.error && body.error.message) {
           msg = body.error.message;
         }
       } catch {}
     }
-    // Try to extract from data
-    if (error.data && error.data.message) {
-      msg = error.data.message;
+    if (errObj.data && errObj.data.message) {
+      msg = errObj.data.message;
     }
-    // Try to extract from response
-    if (error.response && error.response.data && error.response.data.message) {
-      msg = error.response.data.message;
+    if (errObj.response && errObj.response.data && errObj.response.data.message) {
+      msg = errObj.response.data.message;
     }
-    // Try to extract from viem error
-    if (error.message && error.message.includes('Origin')) {
-      const match = error.message.match(/"message":"([^"]+)"/);
+    if (errObj.message && typeof errObj.message === 'string' && errObj.message.includes('Origin')) {
+      const match = errObj.message.match(/"message":"([^"]+)"/);
       if (match && match[1]) {
         msg = match[1];
       }
     }
+  } else if (error instanceof Error) {
+    msg = error.message;
+    details = error.stack || String(error);
   }
-  // Fallback
   if (!msg) msg = "Unknown error";
   return { message: msg, details };
 }
