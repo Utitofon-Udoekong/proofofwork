@@ -131,7 +131,7 @@ export default function Home() {
       <footer className="py-12 border-t border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center text-gray-400">
-            <p>© 2024 ProofOfWork. All rights reserved.</p>
+            <p>© 2025 ProofOfWork. All rights reserved.</p>
             <p className="mt-2 text-sm">Secure, decentralized, and tamper-proof professional credentials on the blockchain</p>
             <div className="mt-4 flex justify-center items-center gap-2">
               <Link 

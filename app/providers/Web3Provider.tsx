@@ -17,7 +17,6 @@ import {
 import { contractAddresses } from '@/app/lib/contracts/addresses';
 import { ipfsService } from '@/app/lib/services/ipfs';
 import { readContract, simulateContract, writeContract, waitForTransactionReceipt } from '@wagmi/core'
-import { metaMask } from 'wagmi/connectors'
 import { parseError } from '@/app/lib/parseError';
 import type { VerificationRequest, VerificationRequestStatus, Organization } from '@/app/lib/types';
 import { useAppContractEvents } from '@/app/hooks/useAppContractEvents';
@@ -29,11 +28,10 @@ const queryClient = new QueryClient();
 const wagmiConfig = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(process.env.sepoliaAlchemyApiKey),
+    [sepolia.id]: http(),
   },
   connectors: [
     embeddedWallet(),
-    metaMask(),
   ],
 });
 
@@ -89,8 +87,8 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 // Inner provider component that has access to hooks
 function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const userContext = useUser();
-    // Auto-connect the wallet if user has one
-    useAutoConnect();
+  // Auto-connect the wallet if user has one
+  useAutoConnect();
   const { address: wagmiAddress, isConnected, isConnecting } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
@@ -121,7 +119,6 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Contract interaction hooks
-  // const contractWrite = useContractWriteMutation();
   const { switchChain } = useSwitchChain();
 
   // Query for token IDs owned by the user

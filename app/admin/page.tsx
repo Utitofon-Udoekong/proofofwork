@@ -1,8 +1,9 @@
 "use client";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { metaMask } from "wagmi/connectors";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUser } from "@civic/auth-web3/react";
+import { embeddedWallet } from "@civic/auth-web3/wagmi";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWeb3 } from "../providers/Web3Provider";
@@ -16,16 +17,20 @@ const AdminNavbar = () => {
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
   const router = useRouter();
-
+  const { connect } = useConnect();
+  
   const handleSignOut = async () => {
     try {
       await signOut();
       disconnect();
+      connect({ connector: embeddedWallet() });
       router.replace('/');
     } catch (error) {
       console.error(error);
     }
   }
+
+ 
 
   return (
     <nav className="bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700 mb-8 shadow-lg">
@@ -68,6 +73,53 @@ const AdminNavbar = () => {
   );
 }
 
+function parseUserFriendlyError(error: any): { message: string, details?: string } {
+  if (!error) return { message: "Unknown error" };
+  // Try to extract a user-friendly message
+  let msg = "";
+  let details = "";
+  if (typeof error === "string") {
+    try {
+      const parsed = JSON.parse(error);
+      msg = parsed.message || error;
+      details = error;
+    } catch {
+      msg = error;
+      details = error;
+    }
+  } else if (typeof error === "object") {
+    msg = error.message || error.reason || error.code || "Unknown error";
+    details = JSON.stringify(error, null, 2);
+    // Try to extract nested message
+    if (error.body) {
+      try {
+        const body = JSON.parse(error.body);
+        if (body && body.error && body.error.message) {
+          msg = body.error.message;
+        }
+      } catch {}
+    }
+    // Try to extract from data
+    if (error.data && error.data.message) {
+      msg = error.data.message;
+    }
+    // Try to extract from response
+    if (error.response && error.response.data && error.response.data.message) {
+      msg = error.response.data.message;
+    }
+    // Try to extract from viem error
+    if (error.message && error.message.includes('Origin')) {
+      const match = error.message.match(/"message":"([^"]+)"/);
+      if (match && match[1]) {
+        msg = match[1];
+      }
+    }
+  }
+  // Fallback
+  if (!msg) msg = "Unknown error";
+  return { message: msg, details };
+}
+
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const { connect, isPending } = useConnect();
@@ -77,6 +129,7 @@ export default function AdminPage() {
   const [txLoading, setTxLoading] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
 
   const isOwner = isConnected && address && address.toLowerCase() === OWNER_ADDRESS;
 
@@ -196,9 +249,29 @@ export default function AdminPage() {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : error ? (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300">
-              {parseError(error)}
-            </div>
+            (() => {
+              const parsed = parseUserFriendlyError(error);
+              return (
+                <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300">
+                  <div className="flex items-center justify-between">
+                    <span>{parsed.message}</span>
+                    {parsed.details && (
+                      <button
+                        className="ml-4 text-xs underline text-red-200 hover:text-red-100"
+                        onClick={() => setShowErrorDetails((v) => !v)}
+                      >
+                        {showErrorDetails ? "Hide Details" : "Show Details"}
+                      </button>
+                    )}
+                  </div>
+                  {showErrorDetails && parsed.details && (
+                    <pre className="mt-2 text-xs text-red-200 whitespace-pre-wrap break-all max-h-64 overflow-auto bg-red-950/40 p-2 rounded">
+                      {parsed.details}
+                    </pre>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-xl overflow-hidden">
               <div className="grid grid-cols-12 gap-4 p-4 bg-gray-700/50 text-sm font-medium text-gray-300">
