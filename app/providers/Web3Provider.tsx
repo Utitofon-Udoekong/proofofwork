@@ -28,7 +28,7 @@ const queryClient = new QueryClient();
 const wagmiConfig = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: http(process.env.sepoliaAlchemyApiKey),
   },
   connectors: [
     embeddedWallet(),
