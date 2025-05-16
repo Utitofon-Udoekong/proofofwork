@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { userHasWallet } from "@civic/auth-web3";
-import { embeddedWallet } from "@civic/auth-web3/wagmi";
-import { CivicAuthProvider, useUser } from "@civic/auth-web3/react";
+import { embeddedWallet, useAutoConnect } from "@civic/auth-web3/wagmi";
+import { useUser } from "@civic/auth-web3/react";
+import { CivicAuthProvider } from "@civic/auth-web3/nextjs";
 import { useAccount, useConnect, useBalance, useReadContract, useSwitchChain, useDisconnect } from "wagmi";
 import { ResumeMetadata } from '@/app/lib/types';
 import {
@@ -15,7 +16,7 @@ import {
 } from '@/app/lib/contracts/contract-types';
 import { contractAddresses } from '@/app/lib/contracts/addresses';
 import { ipfsService } from '@/app/lib/services/ipfs';
-import { readContract, writeContract, simulateContract, waitForTransactionReceipt } from '@wagmi/core'
+import { readContract, simulateContract, writeContract, waitForTransactionReceipt } from '@wagmi/core'
 import { metaMask } from 'wagmi/connectors'
 import { parseError } from '@/app/lib/parseError';
 import type { VerificationRequest, VerificationRequestStatus, Organization } from '@/app/lib/types';
@@ -75,7 +76,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <WagmiProvider config={wagmiConfig}>
-        <CivicAuthProvider clientId='25bca813-5e88-4086-bd3e-ad116da08d90' chains={[sepolia]} initialChain={sepolia} >
+        <CivicAuthProvider chains={[sepolia]} initialChain={sepolia} >
           <Web3ProviderInner>
             {children}
           </Web3ProviderInner>
@@ -88,6 +89,8 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 // Inner provider component that has access to hooks
 function Web3ProviderInner({ children }: { children: React.ReactNode }) {
   const userContext = useUser();
+    // Auto-connect the wallet if user has one
+    useAutoConnect();
   const { address: wagmiAddress, isConnected, isConnecting } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
@@ -131,8 +134,6 @@ function Web3ProviderInner({ children }: { children: React.ReactNode }) {
       enabled: !!address,
     }
   });
-  // Auto-connect the wallet if user has one
-  // useAutoConnect();
 
   // Fetch token IDs when balance changes
   useEffect(() => {
